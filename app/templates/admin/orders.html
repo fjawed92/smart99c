@@ -1,0 +1,98 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}Orders{% endblock %}
+{% block page_title %}Orders{% endblock %}
+
+{% block content %}
+<!-- Filters -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body">
+    <form method="GET" class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <input type="text" name="q" class="form-control" placeholder="Order # or customer email…" value="{{ search }}">
+      </div>
+      <div class="col-md-2">
+        <select name="status" class="form-select">
+          <option value="">All Statuses</option>
+          {% for s in ['pending','processing','shipped','delivered','cancelled','refunded'] %}
+          <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s|title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <input type="date" name="date_from" class="form-control" value="{{ request.args.get('date_from','') }}">
+      </div>
+      <div class="col-md-2">
+        <input type="date" name="date_to" class="form-control" value="{{ request.args.get('date_to','') }}">
+      </div>
+      <div class="col-md-auto">
+        <button type="submit" class="btn btn-outline-primary">Filter</button>
+        <a href="{{ url_for('admin.orders') }}" class="btn btn-outline-secondary ms-1">Reset</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Order #</th>
+            <th>Customer</th>
+            <th>Date</th>
+            <th>Items</th>
+            <th>Total</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for order in orders %}
+          <tr>
+            <td class="fw-600">{{ order.order_number }}</td>
+            <td>
+              {% if order.shipping_address %}
+              <div>{{ order.shipping_address.full_name }}</div>
+              <small class="text-muted">{{ order.shipping_address.email }}</small>
+              {% elif order.user %}
+              <div>{{ order.user.full_name }}</div>
+              <small class="text-muted">{{ order.user.email }}</small>
+              {% else %}
+              <span class="text-muted">Guest</span>
+              {% endif %}
+            </td>
+            <td class="text-muted">{{ order.created_at.strftime('%b %d, %Y') }}<br><small>{{ order.created_at.strftime('%I:%M %p') }}</small></td>
+            <td>{{ order.items|length }}</td>
+            <td class="fw-600">${{ "%.2f"|format(order.total) }}</td>
+            <td><span class="badge status-{{ order.status }}">{{ order.status|title }}</span></td>
+            <td>
+              <a href="{{ url_for('admin.order_detail', order_id=order.id) }}" class="btn btn-sm btn-outline-secondary">View</a>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="text-center py-5 text-muted">No orders found</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% if pagination.pages > 1 %}
+<nav class="mt-4">
+  <ul class="pagination justify-content-center">
+    {% if pagination.has_prev %}
+    <li class="page-item"><a class="page-link" href="{{ url_for('admin.orders', page=pagination.prev_num, q=search, status=status) }}"><i class="bi bi-chevron-left"></i></a></li>
+    {% endif %}
+    {% for p in pagination.iter_pages() %}
+      {% if p %}<li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" href="{{ url_for('admin.orders', page=p, q=search, status=status) }}">{{ p }}</a></li>
+      {% else %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+    {% endfor %}
+    {% if pagination.has_next %}
+    <li class="page-item"><a class="page-link" href="{{ url_for('admin.orders', page=pagination.next_num, q=search, status=status) }}"><i class="bi bi-chevron-right"></i></a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}

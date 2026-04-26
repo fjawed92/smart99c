@@ -1,0 +1,72 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}Store Settings{% endblock %}
+{% block page_title %}Store Settings{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <form method="POST" action="{{ url_for('admin.settings') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 pt-3">
+          <h6 class="fw-700 mb-0">Store Announcement</h6>
+        </div>
+        <div class="card-body">
+          <label class="form-label">Announcement Bar Text</label>
+          <input type="text" name="announcement" class="form-control"
+                 value="{{ settings.get('announcement', '') }}"
+                 placeholder="e.g. Free shipping on orders over $50! 🎉" />
+          <small class="text-muted">Leave blank to hide the announcement bar.</small>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 pt-3">
+          <h6 class="fw-700 mb-0">Pricing & Tax</h6>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Tax Rate (%)</label>
+              <div class="input-group">
+                <input type="number" name="tax_rate" class="form-control"
+                       value="{{ settings.get('tax_rate', '8.875') }}"
+                       step="0.001" min="0" max="20" placeholder="8.875" />
+                <span class="input-group-text">%</span>
+              </div>
+              <small class="text-muted">NY state tax rate is 8.875%</small>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Free Shipping Threshold</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" name="free_shipping_threshold" class="form-control"
+                       value="{{ settings.get('free_shipping_threshold', '50') }}"
+                       step="0.01" min="0" placeholder="50.00" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 pt-3">
+          <h6 class="fw-700 mb-0">Store Hours</h6>
+        </div>
+        <div class="card-body">
+          <label class="form-label">Store Hours Text</label>
+          <textarea name="store_hours" class="form-control" rows="4"
+                    placeholder="Mon–Sat: 9am–8pm&#10;Sun: 10am–6pm">{{ settings.get('store_hours', '') }}</textarea>
+        </div>
+      </div>
+
+      <div class="text-end">
+        <button type="submit" class="btn btn-primary btn-lg">
+          <i class="bi bi-check-lg me-2"></i>Save Settings
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

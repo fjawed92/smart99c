@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Order Confirmed — Smart 99¢ Plus{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      <div class="text-center mb-5">
+        <div class="confirmation-icon">
+          <i class="bi bi-check-circle-fill"></i>
+        </div>
+        <h1 class="mt-4 fw-700">Order Confirmed!</h1>
+        <p class="text-muted fs-5">Thank you for your order. We'll get it ready for you right away!</p>
+        <div class="order-number-badge">
+          Order # <strong>{{ order.order_number }}</strong>
+        </div>
+      </div>
+
+      <div class="row g-4 mb-4">
+        <div class="col-md-6">
+          <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+              <h6 class="fw-700 mb-3"><i class="bi bi-geo-alt me-2 text-primary"></i>Shipping To</h6>
+              {% if order.shipping_address %}
+              <p class="mb-1"><strong>{{ order.shipping_address.full_name }}</strong></p>
+              <p class="mb-1 text-muted">{{ order.shipping_address.address_line1 }}</p>
+              {% if order.shipping_address.address_line2 %}
+              <p class="mb-1 text-muted">{{ order.shipping_address.address_line2 }}</p>
+              {% endif %}
+              <p class="mb-1 text-muted">{{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.zip_code }}</p>
+              <p class="mb-0 text-muted">{{ order.shipping_address.email }}</p>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+              <h6 class="fw-700 mb-3"><i class="bi bi-receipt me-2 text-primary"></i>Order Summary</h6>
+              <div class="d-flex justify-content-between mb-2">
+                <span class="text-muted">Subtotal</span>
+                <span>${{ "%.2f"|format(order.subtotal) }}</span>
+              </div>
+              <div class="d-flex justify-content-between mb-2">
+                <span class="text-muted">Shipping</span>
+                <span>{% if order.shipping_cost == 0 %}FREE{% else %}${{ "%.2f"|format(order.shipping_cost) }}{% endif %}</span>
+              </div>
+              <div class="d-flex justify-content-between mb-2">
+                <span class="text-muted">Tax</span>
+                <span>${{ "%.2f"|format(order.tax) }}</span>
+              </div>
+              <hr class="my-2" />
+              <div class="d-flex justify-content-between">
+                <strong>Total</strong>
+                <strong class="text-primary">${{ "%.2f"|format(order.total) }}</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Items -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+          <h6 class="fw-700 mb-3"><i class="bi bi-bag me-2 text-primary"></i>Items Ordered</h6>
+          {% for item in order.items %}
+          <div class="d-flex align-items-center gap-3 py-2 {% if not loop.last %}border-bottom{% endif %}">
+            {% if item.product and item.product.primary_image_url %}
+            <img src="{{ item.product.primary_image_url }}" alt="{{ item.product_name }}"
+                 class="cart-item-thumb" style="width:56px;height:56px;" />
+            {% endif %}
+            <div class="flex-grow-1">
+              <p class="mb-0 fw-600">{{ item.product_name }}</p>
+              <p class="mb-0 text-muted small">Qty: {{ item.quantity }} × ${{ "%.2f"|format(item.unit_price) }}</p>
+            </div>
+            <strong>${{ "%.2f"|format(item.total_price) }}</strong>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="text-center">
+        <p class="text-muted mb-4">A confirmation email will be sent to {{ order.shipping_address.email if order.shipping_address else 'your email' }}.</p>
+        <div class="d-flex gap-3 justify-content-center flex-wrap">
+          <a href="{{ url_for('shop.shop') }}" class="btn btn-primary btn-lg">
+            <i class="bi bi-bag me-2"></i>Continue Shopping
+          </a>
+          {% if current_user.is_authenticated %}
+          <a href="{{ url_for('orders.order_list') }}" class="btn btn-outline-secondary btn-lg">
+            <i class="bi bi-list me-2"></i>My Orders
+          </a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,15 @@
+flask==3.0.3
+flask-sqlalchemy==3.1.1
+flask-login==0.6.3
+flask-migrate==4.0.7
+flask-wtf==1.2.1
+flask-mail==0.10.0
+psycopg2-binary==2.9.9
+cloudinary==1.40.0
+stripe==10.3.0
+python-dotenv==1.0.1
+pillow==10.4.0
+gunicorn==22.0.0
+wtforms==3.1.2
+email-validator==2.2.0
+cryptography==43.0.3

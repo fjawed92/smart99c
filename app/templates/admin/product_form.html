@@ -1,0 +1,202 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}{{ 'Edit' if product else 'New' }} Product{% endblock %}
+{% block page_title %}{{ 'Edit' if product else 'New' }} Product{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <a href="{{ url_for('admin.products') }}" class="btn btn-sm btn-outline-secondary me-3">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <h5 class="mb-0 fw-700">{{ 'Edit: ' + product.name if product else 'Add New Product' }}</h5>
+</div>
+
+<form method="POST" enctype="multipart/form-data" novalidate>
+  {{ form.hidden_tag() }}
+  <div class="row g-4">
+
+    <!-- Main Info -->
+    <div class="col-lg-8">
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+          <h6 class="fw-700 mb-3">Product Information</h6>
+          <div class="mb-3">
+            <label class="form-label">Product Name *</label>
+            {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
+            {% for err in form.name.errors %}<div class="invalid-feedback">{{ err }}</div>{% endfor %}
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Short Description</label>
+            {{ form.short_description(class="form-control") }}
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Full Description</label>
+            {{ form.description(class="form-control", rows=6) }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Pricing -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+          <h6 class="fw-700 mb-3">Pricing</h6>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label">Price *</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                {{ form.price(class="form-control" + (" is-invalid" if form.price.errors else "")) }}
+              </div>
+              {% for err in form.price.errors %}<div class="text-danger small">{{ err }}</div>{% endfor %}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Compare Price</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                {{ form.compare_price(class="form-control") }}
+              </div>
+              <small class="text-muted">Shows as crossed-out original price</small>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Cost Price</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                {{ form.cost_price(class="form-control") }}
+              </div>
+              <small class="text-muted">Internal use only</small>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Inventory -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+          <h6 class="fw-700 mb-3">Inventory</h6>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label">SKU</label>
+              {{ form.sku(class="form-control") }}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Stock Quantity</label>
+              {{ form.stock_quantity(class="form-control") }}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Weight (lbs)</label>
+              {{ form.weight(class="form-control") }}
+            </div>
+          </div>
+          <div class="mt-3">
+            <div class="form-check">
+              {{ form.track_inventory(class="form-check-input") }}
+              <label class="form-check-label">Track Inventory</label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Images -->
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <h6 class="fw-700 mb-3">Product Images</h6>
+          {% if product and product.images %}
+          <div class="row g-2 mb-3">
+            {% for img in product.images %}
+            <div class="col-3">
+              <div class="position-relative">
+                <img src="{{ img.image_url }}" alt="Product image" class="img-fluid rounded" style="height:100px;object-fit:cover;width:100%;" />
+                {% if img.is_primary %}
+                <span class="position-absolute top-0 start-0 badge bg-primary m-1" style="font-size:.6rem;">Primary</span>
+                {% endif %}
+                <button type="button" class="btn btn-danger btn-sm position-absolute top-0 end-0 m-1 delete-img-btn"
+                        data-image-id="{{ img.id }}" data-product-id="{{ product.id }}"
+                        style="padding:.1rem .3rem;font-size:.7rem;">
+                  <i class="bi bi-x"></i>
+                </button>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+          <div class="upload-zone">
+            <input type="file" name="images" id="imageInput" multiple accept="image/*" class="d-none" />
+            <label for="imageInput" class="upload-zone-label">
+              <i class="bi bi-cloud-upload fs-2 text-muted mb-2 d-block"></i>
+              <strong>Click to upload images</strong>
+              <p class="text-muted small mb-0">PNG, JPG up to 16MB each. First image becomes the primary.</p>
+            </label>
+          </div>
+          <div id="imagePreviewContainer" class="row g-2 mt-2"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+          <h6 class="fw-700 mb-3">Status</h6>
+          <div class="form-check form-switch mb-3">
+            {{ form.is_active(class="form-check-input") }}
+            <label class="form-check-label fw-600">Active (visible in store)</label>
+          </div>
+          <div class="form-check form-switch">
+            {{ form.is_featured(class="form-check-input") }}
+            <label class="form-check-label fw-600">Featured on homepage</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+          <h6 class="fw-700 mb-3">Category</h6>
+          {{ form.category_id(class="form-select") }}
+        </div>
+      </div>
+
+      <div class="d-grid gap-2">
+        <button type="submit" class="btn btn-primary btn-lg">
+          <i class="bi bi-check-lg me-2"></i>{{ 'Save Changes' if product else 'Create Product' }}
+        </button>
+        <a href="{{ url_for('admin.products') }}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  // Image preview
+  document.getElementById('imageInput').addEventListener('change', function() {
+    const container = document.getElementById('imagePreviewContainer');
+    container.innerHTML = '';
+    Array.from(this.files).forEach((file, i) => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        container.insertAdjacentHTML('beforeend', `
+          <div class="col-3">
+            <img src="${e.target.result}" class="img-fluid rounded" style="height:100px;object-fit:cover;width:100%;" />
+            ${i === 0 ? '<span class="badge bg-primary mt-1 d-block text-center" style="font-size:.6rem;">Primary</span>' : ''}
+          </div>
+        `);
+      };
+      reader.readAsDataURL(file);
+    });
+  });
+
+  // Delete existing images
+  document.querySelectorAll('.delete-img-btn').forEach(btn => {
+    btn.addEventListener('click', async function() {
+      if (!confirm('Delete this image?')) return;
+      const imgId = this.dataset.imageId;
+      const productId = this.dataset.productId;
+      const resp = await fetch(`/admin/products/${productId}/images/${imgId}/delete`, {
+        method: 'POST',
+        headers: {'X-CSRFToken': '{{ csrf_token() }}'}
+      });
+      if ((await resp.json()).success) this.closest('.col-3').remove();
+    });
+  });
+</script>
+{% endblock %}

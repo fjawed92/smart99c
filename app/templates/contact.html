@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Contact Us — Smart 99¢ Plus{% endblock %}
+
+{% block content %}
+<div class="page-header-bar">
+  <div class="container">
+    <h1 class="page-title">Contact Us</h1>
+  </div>
+</div>
+
+<div class="container py-5">
+  <div class="row g-5">
+    <div class="col-lg-6">
+      <h2 class="section-title mb-4">Get In Touch</h2>
+      <form method="POST" action="{{ url_for('main.contact') }}">
+        {{ form.hidden_tag() }}
+        <div class="mb-3">
+          <label class="form-label">Your Name *</label>
+          {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
+          {% for err in form.name.errors %}
+          <div class="invalid-feedback">{{ err }}</div>
+          {% endfor %}
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Email Address *</label>
+          {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else "")) }}
+          {% for err in form.email.errors %}
+          <div class="invalid-feedback">{{ err }}</div>
+          {% endfor %}
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Subject *</label>
+          {{ form.subject(class="form-control" + (" is-invalid" if form.subject.errors else "")) }}
+          {% for err in form.subject.errors %}
+          <div class="invalid-feedback">{{ err }}</div>
+          {% endfor %}
+        </div>
+        <div class="mb-4">
+          <label class="form-label">Message *</label>
+          {{ form.message(class="form-control" + (" is-invalid" if form.message.errors else ""), rows=5) }}
+          {% for err in form.message.errors %}
+          <div class="invalid-feedback">{{ err }}</div>
+          {% endfor %}
+        </div>
+        <button type="submit" class="btn btn-primary btn-lg">
+          <i class="bi bi-send me-2"></i>Send Message
+        </button>
+      </form>
+    </div>
+    <div class="col-lg-6">
+      <h2 class="section-title mb-4">Store Information</h2>
+      <div class="contact-info-item">
+        <div class="contact-info-icon"><i class="bi bi-geo-alt-fill"></i></div>
+        <div>
+          <strong>Address</strong>
+          <p class="text-muted mb-0">66 NY-109<br>West Babylon, NY 11704</p>
+        </div>
+      </div>
+      <div class="contact-info-item">
+        <div class="contact-info-icon"><i class="bi bi-telephone-fill"></i></div>
+        <div>
+          <strong>Phone</strong>
+          <p class="text-muted mb-0"><a href="tel:5168518097">516-851-8097</a></p>
+        </div>
+      </div>
+      <div class="contact-info-item">
+        <div class="contact-info-icon"><i class="bi bi-clock-fill"></i></div>
+        <div>
+          <strong>Store Hours</strong>
+          <p class="text-muted mb-0">Mon–Sat: 9:00 AM – 8:00 PM<br>Sunday: 10:00 AM – 6:00 PM</p>
+        </div>
+      </div>
+      <div class="contact-info-item">
+        <div class="contact-info-icon"><i class="bi bi-globe"></i></div>
+        <div>
+          <strong>Website</strong>
+          <p class="text-muted mb-0">Smart99c.com</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
