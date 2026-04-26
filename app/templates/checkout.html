@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+{% block title %}Checkout — Smart 99¢ Plus{% endblock %}
+
+{% block extra_head %}
+<script src="https://js.stripe.com/v3/"></script>
+{% endblock %}
+
+{% block content %}
+<div class="page-header-bar">
+  <div class="container">
+    <!-- Progress Indicator -->
+    <div class="checkout-progress d-flex align-items-center gap-0 mb-3">
+      <div class="progress-step completed"><span>1</span> Cart</div>
+      <div class="progress-connector"></div>
+      <div class="progress-step active"><span>2</span> Checkout</div>
+      <div class="progress-connector"></div>
+      <div class="progress-step"><span>3</span> Confirmation</div>
+    </div>
+  </div>
+</div>
+
+<div class="container py-5">
+  <div class="row g-5">
+
+    <!-- Left: Form -->
+    <div class="col-lg-7">
+      <form id="checkoutForm" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+
+        <!-- Contact Info -->
+        <div class="checkout-section mb-4">
+          <h5 class="checkout-section-title"><i class="bi bi-person me-2"></i>Contact Information</h5>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">First Name *</label>
+              <input type="text" class="form-control" name="first_name" id="firstName" required
+                     value="{{ form.first_name.data or '' }}" />
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Last Name *</label>
+              <input type="text" class="form-control" name="last_name" id="lastName" required
+                     value="{{ form.last_name.data or '' }}" />
+            </div>
+            <div class="col-md-7">
+              <label class="form-label">Email Address *</label>
+              <input type="email" class="form-control" name="email" id="email" required
+                     value="{{ form.email.data or '' }}" />
+            </div>
+            <div class="col-md-5">
+              <label class="form-label">Phone</label>
+              <input type="tel" class="form-control" name="phone" id="phone"
+                     value="{{ form.phone.data or '' }}" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Shipping Address -->
+        <div class="checkout-section mb-4">
+          <h5 class="checkout-section-title"><i class="bi bi-geo-alt me-2"></i>Shipping Address</h5>
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">Street Address *</label>
+              <input type="text" class="form-control" name="address_line1" id="address1" required
+                     placeholder="123 Main Street" />
+            </div>
+            <div class="col-12">
+              <label class="form-label">Apt, Suite, Unit (optional)</label>
+              <input type="text" class="form-control" name="address_line2" id="address2" placeholder="Apt 4B" />
+            </div>
+            <div class="col-md-5">
+              <label class="form-label">City *</label>
+              <input type="text" class="form-control" name="city" id="city" required />
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">State *</label>
+              <select class="form-select" name="state" id="state" required>
+                <option value="">Select…</option>
+                {% for code, name in [('AL','Alabama'),('AK','Alaska'),('AZ','Arizona'),('AR','Arkansas'),('CA','California'),('CO','Colorado'),('CT','Connecticut'),('DE','Delaware'),('FL','Florida'),('GA','Georgia'),('HI','Hawaii'),('ID','Idaho'),('IL','Illinois'),('IN','Indiana'),('IA','Iowa'),('KS','Kansas'),('KY','Kentucky'),('LA','Louisiana'),('ME','Maine'),('MD','Maryland'),('MA','Massachusetts'),('MI','Michigan'),('MN','Minnesota'),('MS','Mississippi'),('MO','Missouri'),('MT','Montana'),('NE','Nebraska'),('NV','Nevada'),('NH','New Hampshire'),('NJ','New Jersey'),('NM','New Mexico'),('NY','New York'),('NC','North Carolina'),('ND','North Dakota'),('OH','Ohio'),('OK','Oklahoma'),('OR','Oregon'),('PA','Pennsylvania'),('RI','Rhode Island'),('SC','South Carolina'),('SD','South Dakota'),('TN','Tennessee'),('TX','Texas'),('UT','Utah'),('VT','Vermont'),('VA','Virginia'),('WA','Washington'),('WV','West Virginia'),('WI','Wisconsin'),('WY','Wyoming')] %}
+                <option value="{{ code }}" {% if code == 'NY' %}selected{% endif %}>{{ name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">ZIP Code *</label>
+              <input type="text" class="form-control" name="zip_code" id="zipCode" required maxlength="10" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Shipping Method -->
+        <div class="checkout-section mb-4">
+          <h5 class="checkout-section-title"><i class="bi bi-truck me-2"></i>Shipping Method</h5>
+          <div class="shipping-options" id="shippingOptions">
+            {% for rate in shipping_rates %}
+            <label class="shipping-option {% if loop.first %}selected{% endif %}">
+              <input type="radio" name="shipping_rate_id" value="{{ rate.id }}"
+                     {% if loop.first %}checked{% endif %}
+                     data-price="{{ rate.price }}" class="shipping-radio" />
+              <div class="shipping-option-content">
+                <div class="d-flex justify-content-between align-items-start">
+                  <div>
+                    <strong>{{ rate.name }}</strong>
+                    {% if rate.estimated_days %}
+                    <br><span class="text-muted small">{{ rate.estimated_days }}</span>
+                    {% endif %}
+                  </div>
+                  <span class="fw-700 text-primary">
+                    {% if rate.price == 0 %}FREE{% else %}${{ "%.2f"|format(rate.price) }}{% endif %}
+                  </span>
+                </div>
+              </div>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Payment -->
+        <div class="checkout-section mb-4">
+          <h5 class="checkout-section-title"><i class="bi bi-credit-card me-2"></i>Payment</h5>
+          <div id="payment-element" class="stripe-element-container">
+            <!-- Stripe mounts here -->
+          </div>
+          <div id="payment-message" class="text-danger small mt-2 d-none"></div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-lg w-100" id="submitBtn">
+          <span id="submitText"><i class="bi bi-lock me-2"></i>Place Order</span>
+          <span id="submitSpinner" class="d-none">
+            <span class="spinner-border spinner-border-sm me-2"></span>Processing…
+          </span>
+        </button>
+        <p class="text-muted text-center small mt-2">
+          <i class="bi bi-shield-check me-1"></i>Your payment is secured by Stripe
+        </p>
+      </form>
+    </div>
+
+    <!-- Right: Order Summary (sticky) -->
+    <div class="col-lg-5">
+      <div class="order-summary sticky-top" style="top: 80px;">
+        <div class="card border-0 shadow-sm">
+          <div class="card-body">
+            <h5 class="fw-700 mb-4">Order Summary</h5>
+            {% for item in items %}
+            <div class="d-flex align-items-center gap-3 mb-3">
+              <div class="position-relative">
+                {% if item.product.primary_image_url %}
+                <img src="{{ item.product.primary_image_url }}" alt="{{ item.product.name }}"
+                     class="cart-item-thumb" style="width:56px;height:56px;" />
+                {% endif %}
+                <span class="cart-item-badge">{{ item.quantity }}</span>
+              </div>
+              <div class="flex-grow-1">
+                <p class="mb-0 fw-600 small">{{ item.product.name }}</p>
+              </div>
+              <strong class="small">${{ "%.2f"|format(item.total) }}</strong>
+            </div>
+            {% endfor %}
+            <hr />
+            <div class="d-flex justify-content-between mb-2">
+              <span>Subtotal</span>
+              <strong>${{ "%.2f"|format(subtotal) }}</strong>
+            </div>
+            <div class="d-flex justify-content-between mb-2">
+              <span>Shipping</span>
+              <strong id="summaryShipping">—</strong>
+            </div>
+            <div class="d-flex justify-content-between mb-2">
+              <span>Tax ({{ "%.2f"|format(8.875) }}%)</span>
+              <strong id="summaryTax">${{ "%.2f"|format(tax) }}</strong>
+            </div>
+            <hr />
+            <div class="d-flex justify-content-between align-items-center">
+              <strong class="fs-5">Total</strong>
+              <strong class="fs-4 text-primary" id="summaryTotal">$—</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const STRIPE_PUBLIC_KEY = "{{ stripe_public_key }}";
+const subtotal = {{ subtotal|float }};
+const taxRate = {{ config.TAX_RATE if config else 0.08875 }};
+
+let stripe, elements, paymentElement;
+
+async function initStripe(shippingRateId) {
+  const resp = await fetch('/checkout/create-payment-intent', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrf_token]').value},
+    body: JSON.stringify({shipping_rate_id: shippingRateId})
+  });
+  const data = await resp.json();
+  if (data.error) { showError(data.error); return; }
+
+  document.getElementById('summaryShipping').textContent = data.shipping === 0 ? 'FREE' : '$' + data.shipping.toFixed(2);
+  document.getElementById('summaryTax').textContent = '$' + data.tax.toFixed(2);
+  document.getElementById('summaryTotal').textContent = '$' + data.total.toFixed(2);
+
+  if (!stripe) stripe = Stripe(STRIPE_PUBLIC_KEY);
+
+  if (elements) elements.destroy?.();
+  elements = stripe.elements({clientSecret: data.client_secret, appearance: {
+    theme: 'stripe',
+    variables: {colorPrimary: '#E8334A', fontFamily: 'Nunito, sans-serif', borderRadius: '8px'}
+  }});
+  paymentElement = elements.create('payment');
+  paymentElement.mount('#payment-element');
+}
+
+function getSelectedShippingId() {
+  return parseInt(document.querySelector('.shipping-radio:checked')?.value || 0);
+}
+
+// Init on load
+document.addEventListener('DOMContentLoaded', () => {
+  if (STRIPE_PUBLIC_KEY) initStripe(getSelectedShippingId());
+
+  document.querySelectorAll('.shipping-radio').forEach(radio => {
+    radio.addEventListener('change', function() {
+      document.querySelectorAll('.shipping-option').forEach(o => o.classList.remove('selected'));
+      this.closest('.shipping-option').classList.add('selected');
+      if (STRIPE_PUBLIC_KEY) initStripe(getSelectedShippingId());
+    });
+  });
+});
+
+document.getElementById('checkoutForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  if (!stripe || !elements) { showError('Payment not loaded. Please refresh.'); return; }
+
+  const btn = document.getElementById('submitBtn');
+  document.getElementById('submitText').classList.add('d-none');
+  document.getElementById('submitSpinner').classList.remove('d-none');
+  btn.disabled = true;
+
+  const formData = new FormData(this);
+
+  const {error, paymentIntent} = await stripe.confirmPayment({
+    elements,
+    confirmParams: {return_url: window.location.origin + '/order/confirmation/PENDING'},
+    redirect: 'if_required'
+  });
+
+  if (error) {
+    showError(error.message);
+    btn.disabled = false;
+    document.getElementById('submitText').classList.remove('d-none');
+    document.getElementById('submitSpinner').classList.add('d-none');
+    return;
+  }
+
+  // Save order
+  const payload = {
+    payment_intent_id: paymentIntent.id,
+    shipping_rate_id: getSelectedShippingId(),
+    first_name: formData.get('first_name'),
+    last_name: formData.get('last_name'),
+    email: formData.get('email'),
+    phone: formData.get('phone'),
+    address_line1: formData.get('address_line1'),
+    address_line2: formData.get('address_line2'),
+    city: formData.get('city'),
+    state: formData.get('state'),
+    zip_code: formData.get('zip_code'),
+    country: 'US'
+  };
+
+  const resp = await fetch('/checkout/confirm', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': formData.get('csrf_token')},
+    body: JSON.stringify(payload)
+  });
+  const result = await resp.json();
+  if (result.success) {
+    window.location.href = result.redirect;
+  } else {
+    showError(result.error || 'Order failed. Please try again.');
+    btn.disabled = false;
+    document.getElementById('submitText').classList.remove('d-none');
+    document.getElementById('submitSpinner').classList.add('d-none');
+  }
+});
+
+function showError(msg) {
+  const el = document.getElementById('payment-message');
+  el.textContent = msg;
+  el.classList.remove('d-none');
+  setTimeout(() => el.classList.add('d-none'), 6000);
+}
+</script>
+{% endblock %}

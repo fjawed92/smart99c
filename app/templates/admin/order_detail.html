@@ -1,0 +1,110 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}Order {{ order.order_number }}{% endblock %}
+{% block page_title %}Order {{ order.order_number }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4 gap-3">
+  <a href="{{ url_for('admin.orders') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <span class="badge status-{{ order.status }} fs-6">{{ order.status|title }}</span>
+  <span class="text-muted small">Placed {{ order.created_at.strftime('%B %d, %Y at %I:%M %p') }}</span>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+
+    <!-- Items -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-0 pt-3">
+        <h6 class="fw-700 mb-0">Items ({{ order.items|length }})</h6>
+      </div>
+      <div class="card-body">
+        {% for item in order.items %}
+        <div class="d-flex align-items-center gap-3 py-2 {% if not loop.last %}border-bottom{% endif %}">
+          {% if item.product and item.product.primary_image_url %}
+          <img src="{{ item.product.primary_image_url }}" alt="{{ item.product_name }}" class="cart-item-thumb" />
+          {% endif %}
+          <div class="flex-grow-1">
+            <div class="fw-600">{{ item.product_name }}</div>
+            <small class="text-muted">SKU: {{ item.product_sku or '—' }}</small>
+          </div>
+          <div class="text-muted small">×{{ item.quantity }}</div>
+          <div class="text-muted small">${{ "%.2f"|format(item.unit_price) }}</div>
+          <div class="fw-600">${{ "%.2f"|format(item.total_price) }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Shipping Address -->
+    {% if order.shipping_address %}
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-0 pt-3">
+        <h6 class="fw-700 mb-0">Shipping Address</h6>
+      </div>
+      <div class="card-body">
+        <p class="mb-1 fw-600">{{ order.shipping_address.full_name }}</p>
+        <p class="mb-1 text-muted">{{ order.shipping_address.address_line1 }}</p>
+        {% if order.shipping_address.address_line2 %}<p class="mb-1 text-muted">{{ order.shipping_address.address_line2 }}</p>{% endif %}
+        <p class="mb-1 text-muted">{{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.zip_code }}</p>
+        <p class="mb-1 text-muted"><i class="bi bi-envelope me-2"></i>{{ order.shipping_address.email }}</p>
+        {% if order.shipping_address.phone %}
+        <p class="mb-0 text-muted"><i class="bi bi-telephone me-2"></i>{{ order.shipping_address.phone }}</p>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Payment Info -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 pt-3">
+        <h6 class="fw-700 mb-0">Payment</h6>
+      </div>
+      <div class="card-body">
+        {% if order.stripe_payment_intent_id %}
+        <p class="mb-1 text-muted small">Payment Intent: <code>{{ order.stripe_payment_intent_id }}</code></p>
+        {% endif %}
+        {% if order.stripe_charge_id %}
+        <p class="mb-0 text-muted small">Charge ID: <code>{{ order.stripe_charge_id }}</code></p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="col-lg-4">
+    <!-- Update Status -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-0 pt-3">
+        <h6 class="fw-700 mb-0">Update Status</h6>
+      </div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('admin.update_order_status', order_id=order.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <select name="status" class="form-select mb-3">
+            {% for s in status_choices %}
+            <option value="{{ s }}" {% if s == order.status %}selected{% endif %}>{{ s|title }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-primary w-100">Update Status</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Order Summary -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 pt-3">
+        <h6 class="fw-700 mb-0">Order Total</h6>
+      </div>
+      <div class="card-body">
+        <div class="d-flex justify-content-between mb-2"><span>Subtotal</span><span>${{ "%.2f"|format(order.subtotal) }}</span></div>
+        <div class="d-flex justify-content-between mb-2"><span>Shipping</span><span>{% if order.shipping_cost == 0 %}FREE{% else %}${{ "%.2f"|format(order.shipping_cost) }}{% endif %}</span></div>
+        <div class="d-flex justify-content-between mb-2"><span>Tax</span><span>${{ "%.2f"|format(order.tax) }}</span></div>
+        <hr />
+        <div class="d-flex justify-content-between"><strong>Total</strong><strong class="text-primary">${{ "%.2f"|format(order.total) }}</strong></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

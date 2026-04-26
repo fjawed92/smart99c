@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block title %}{{ product.name }} — Smart 99¢ Plus{% endblock %}
+{% block meta_description %}{{ product.short_description or product.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header-bar">
+  <div class="container">
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Home</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('shop.shop') }}">Shop</a></li>
+        {% if product.category %}
+        <li class="breadcrumb-item"><a href="{{ url_for('shop.shop_category', category_slug=product.category.slug) }}">{{ product.category.name }}</a></li>
+        {% endif %}
+        <li class="breadcrumb-item active">{{ product.name }}</li>
+      </ol>
+    </nav>
+  </div>
+</div>
+
+<div class="container py-5">
+  <div class="row g-5">
+
+    <!-- Image Gallery -->
+    <div class="col-lg-6">
+      <div class="product-gallery">
+        <div class="product-main-image mb-3">
+          {% if product.images %}
+          <img src="{{ product.images[0].image_url }}" alt="{{ product.name }}" id="mainProductImage" class="img-fluid rounded-3" />
+          {% else %}
+          <div class="product-img-placeholder-lg rounded-3 d-flex align-items-center justify-content-center">
+            <i class="bi bi-image" style="font-size:5rem;color:var(--gray-200);"></i>
+          </div>
+          {% endif %}
+        </div>
+        {% if product.images|length > 1 %}
+        <div class="product-thumbnails d-flex gap-2 flex-wrap">
+          {% for img in product.images %}
+          <div class="product-thumbnail {% if loop.first %}active{% endif %}" data-src="{{ img.image_url }}">
+            <img src="{{ img.image_url }}" alt="{{ product.name }} {{ loop.index }}" />
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Product Info -->
+    <div class="col-lg-6">
+      {% if product.category %}
+      <span class="product-category-tag mb-2 d-inline-block">{{ product.category.name }}</span>
+      {% endif %}
+
+      <h1 class="product-detail-title">{{ product.name }}</h1>
+
+      {% if product.sku %}
+      <p class="text-muted small mb-3">SKU: {{ product.sku }}</p>
+      {% endif %}
+
+      <div class="product-detail-pricing mb-4">
+        <span class="price-main">${{ "%.2f"|format(product.price) }}</span>
+        {% if product.is_on_sale %}
+        <span class="price-compare">${{ "%.2f"|format(product.compare_price) }}</span>
+        <span class="badge bg-danger ms-2">Save {{ product.discount_percent }}%</span>
+        {% endif %}
+      </div>
+
+      {% if product.short_description %}
+      <p class="product-short-desc mb-4">{{ product.short_description }}</p>
+      {% endif %}
+
+      <!-- Stock Status -->
+      <div class="stock-status mb-4">
+        {% if product.in_stock %}
+          {% if product.track_inventory and product.stock_quantity <= 10 %}
+          <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>Only {{ product.stock_quantity }} left</span>
+          {% else %}
+          <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>In Stock</span>
+          {% endif %}
+        {% else %}
+        <span class="badge bg-secondary"><i class="bi bi-x-circle me-1"></i>Out of Stock</span>
+        {% endif %}
+      </div>
+
+      <!-- Add to Cart -->
+      {% if product.in_stock %}
+      <div class="add-to-cart-section">
+        <div class="d-flex gap-3 align-items-center mb-3">
+          <div class="quantity-selector">
+            <button class="qty-btn qty-minus" type="button"><i class="bi bi-dash"></i></button>
+            <input type="number" class="qty-input" id="productQty" value="1" min="1" max="{{ product.stock_quantity if product.track_inventory else 99 }}">
+            <button class="qty-btn qty-plus" type="button"><i class="bi bi-plus"></i></button>
+          </div>
+          <button class="btn btn-primary btn-lg flex-grow-1 add-to-cart-btn"
+                  data-product-id="{{ product.id }}"
+                  data-qty-input="productQty"
+                  id="addToCartBtn">
+            <i class="bi bi-bag-plus me-2"></i>Add to Cart
+          </button>
+        </div>
+      </div>
+      {% else %}
+      <button class="btn btn-secondary btn-lg w-100" disabled>Out of Stock</button>
+      {% endif %}
+
+      <hr class="my-4" />
+
+      <!-- Meta -->
+      <div class="product-meta text-muted small">
+        {% if product.weight %}
+        <p class="mb-1"><i class="bi bi-box me-2"></i>Weight: {{ product.weight }} lbs</p>
+        {% endif %}
+        {% if product.category %}
+        <p class="mb-1"><i class="bi bi-tag me-2"></i>Category: <a href="{{ url_for('shop.shop_category', category_slug=product.category.slug) }}">{{ product.category.name }}</a></p>
+        {% endif %}
+      </div>
+
+      <!-- Tabs -->
+      <div class="product-tabs mt-4">
+        <ul class="nav nav-tabs" id="productTabs">
+          <li class="nav-item">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabDescription">Description</button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabShipping">Shipping Info</button>
+          </li>
+        </ul>
+        <div class="tab-content p-3 border border-top-0 rounded-bottom">
+          <div class="tab-pane fade show active" id="tabDescription">
+            {% if product.description %}
+            <div class="product-description">{{ product.description|safe }}</div>
+            {% else %}
+            <p class="text-muted">No description available.</p>
+            {% endif %}
+          </div>
+          <div class="tab-pane fade" id="tabShipping">
+            <ul class="list-unstyled mb-0">
+              <li class="mb-2"><i class="bi bi-truck text-primary me-2"></i>Standard shipping: 3–5 business days</li>
+              <li class="mb-2"><i class="bi bi-lightning text-primary me-2"></i>Express shipping: 1–2 business days</li>
+              <li class="mb-2"><i class="bi bi-gift text-primary me-2"></i>Free shipping on orders over $50</li>
+              <li><i class="bi bi-arrow-counterclockwise text-primary me-2"></i>30-day hassle-free returns</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Related Products -->
+  {% if related %}
+  <div class="mt-5 pt-4">
+    <h3 class="section-title mb-4">You May Also Like</h3>
+    <div class="row g-3">
+      {% for rp in related %}
+      <div class="col-6 col-md-3">
+        {% set product = rp %}
+        {% include '_product_card.html' %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  // Thumbnail switcher
+  document.querySelectorAll('.product-thumbnail').forEach(thumb => {
+    thumb.addEventListener('click', function() {
+      document.getElementById('mainProductImage').src = this.dataset.src;
+      document.querySelectorAll('.product-thumbnail').forEach(t => t.classList.remove('active'));
+      this.classList.add('active');
+    });
+  });
+
+  // Qty selector
+  const qtyInput = document.getElementById('productQty');
+  const max = parseInt(qtyInput?.max) || 99;
+  document.querySelector('.qty-minus')?.addEventListener('click', () => {
+    if (parseInt(qtyInput.value) > 1) qtyInput.value = parseInt(qtyInput.value) - 1;
+  });
+  document.querySelector('.qty-plus')?.addEventListener('click', () => {
+    if (parseInt(qtyInput.value) < max) qtyInput.value = parseInt(qtyInput.value) + 1;
+  });
+</script>
+{% endblock %}

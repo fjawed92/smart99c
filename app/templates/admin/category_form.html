@@ -1,0 +1,60 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}{{ 'Edit' if category else 'New' }} Category{% endblock %}
+{% block page_title %}{{ 'Edit' if category else 'New' }} Category{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <a href="{{ url_for('admin.categories') }}" class="btn btn-sm btn-outline-secondary me-3">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <h5 class="mb-0 fw-700">{{ 'Edit: ' + category.name if category else 'Add New Category' }}</h5>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <form method="POST" enctype="multipart/form-data">
+      {{ form.hidden_tag() }}
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label">Category Name *</label>
+            {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
+            {% for err in form.name.errors %}<div class="invalid-feedback">{{ err }}</div>{% endfor %}
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Description</label>
+            {{ form.description(class="form-control", rows=3) }}
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Category Image</label>
+            {% if category and category.image_url %}
+            <div class="mb-2">
+              <img src="{{ category.image_url }}" alt="{{ category.name }}" style="height:100px;border-radius:8px;" />
+            </div>
+            {% endif %}
+            <input type="file" name="image" class="form-control" accept="image/*" />
+          </div>
+          <div class="row g-3">
+            <div class="col-6">
+              <div class="form-check form-switch">
+                {{ form.is_active(class="form-check-input") }}
+                <label class="form-check-label">Active</label>
+              </div>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Sort Order</label>
+              {{ form.sort_order(class="form-control form-control-sm") }}
+            </div>
+          </div>
+        </div>
+        <div class="card-footer bg-white border-0 d-flex gap-2 justify-content-end">
+          <a href="{{ url_for('admin.categories') }}" class="btn btn-outline-secondary">Cancel</a>
+          <button type="submit" class="btn btn-primary">
+            {{ 'Save Changes' if category else 'Create Category' }}
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

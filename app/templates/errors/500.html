@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Server Error — Smart 99¢ Plus{% endblock %}
+
+{% block content %}
+<div class="container py-5 text-center">
+  <div style="font-size:6rem;font-family:'Fredoka One',sans-serif;color:var(--primary);line-height:1;">500</div>
+  <h2 class="fw-700 mt-3">Something Went Wrong</h2>
+  <p class="text-muted mb-4">We're having some technical difficulties. Please try again in a moment.</p>
+  <a href="{{ url_for('main.index') }}" class="btn btn-primary btn-lg">Go Home</a>
+</div>
+{% endblock %}

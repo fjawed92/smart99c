@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block title %}Smart 99¢ Plus — Value Shopping in West Babylon, NY{% endblock %}
+
+{% block content %}
+
+<!-- Hero Banner -->
+<section class="hero-section">
+  <div class="container">
+    <div class="row align-items-center min-vh-75">
+      <div class="col-lg-6">
+        <div class="hero-badge mb-3">🛒 New Arrivals Every Week</div>
+        <h1 class="hero-headline">
+          Big Deals.<br />
+          <span class="text-accent">Tiny Prices.</span><br />
+          Always.
+        </h1>
+        <p class="hero-subtext">
+          Quality everyday essentials starting at just 99¢. Shop online or visit us at 66 NY-109, West Babylon, NY.
+        </p>
+        <div class="hero-actions">
+          <a href="{{ url_for('shop.shop') }}" class="btn btn-hero-primary btn-lg me-3">
+            Shop Now <i class="bi bi-arrow-right ms-2"></i>
+          </a>
+          <a href="{{ url_for('main.about') }}" class="btn btn-hero-outline btn-lg">
+            Our Story
+          </a>
+        </div>
+      </div>
+      <div class="col-lg-6 d-none d-lg-block">
+        <div class="hero-graphic">
+          <div class="hero-shape-1"></div>
+          <div class="hero-shape-2"></div>
+          <div class="hero-price-bubble">
+            <span class="bubble-label">Starting at</span>
+            <span class="bubble-price">99¢</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="hero-wave">
+    <svg viewBox="0 0 1440 80" preserveAspectRatio="none"><path d="M0,40 C360,80 1080,0 1440,40 L1440,80 L0,80 Z" fill="#ffffff"/></svg>
+  </div>
+</section>
+
+<!-- Store Info Strip -->
+<section class="info-strip py-3">
+  <div class="container">
+    <div class="row g-0 text-center">
+      <div class="col-md-4 info-strip-item">
+        <i class="bi bi-geo-alt-fill"></i>
+        <div>
+          <strong>Visit Us</strong>
+          <span>66 NY-109, West Babylon, NY</span>
+        </div>
+      </div>
+      <div class="col-md-4 info-strip-item">
+        <i class="bi bi-telephone-fill"></i>
+        <div>
+          <strong>Call Us</strong>
+          <span><a href="tel:5168518097">516-851-8097</a></span>
+        </div>
+      </div>
+      <div class="col-md-4 info-strip-item">
+        <i class="bi bi-truck"></i>
+        <div>
+          <strong>Free Shipping</strong>
+          <span>On orders over ${{ free_shipping_threshold }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Category Grid -->
+{% if categories %}
+<section class="section-padded">
+  <div class="container">
+    <div class="section-header text-center mb-5">
+      <h2 class="section-title">Shop by Category</h2>
+      <p class="section-subtitle">Find what you need in our wide selection</p>
+    </div>
+    <div class="row g-3">
+      {% for category in categories %}
+      <div class="col-6 col-md-4 col-lg-3">
+        <a href="{{ url_for('shop.shop_category', category_slug=category.slug) }}" class="category-card">
+          <div class="category-card-img">
+            {% if category.image_url %}
+            <img src="{{ category.image_url }}" alt="{{ category.name }}" />
+            {% else %}
+            <div class="category-placeholder"><i class="bi bi-grid-3x3-gap-fill"></i></div>
+            {% endif %}
+          </div>
+          <div class="category-card-body">
+            <h6>{{ category.name }}</h6>
+          </div>
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="text-center mt-4">
+      <a href="{{ url_for('shop.shop') }}" class="btn btn-outline-primary">Browse All Categories</a>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<!-- Featured Products -->
+{% if featured_products %}
+<section class="section-padded bg-light-tinted">
+  <div class="container">
+    <div class="section-header d-flex align-items-center justify-content-between mb-5">
+      <div>
+        <h2 class="section-title mb-1">Featured Products</h2>
+        <p class="section-subtitle mb-0">Hand-picked deals just for you</p>
+      </div>
+      <a href="{{ url_for('shop.shop') }}" class="btn btn-outline-primary d-none d-md-block">View All</a>
+    </div>
+    <div class="row g-3">
+      {% for product in featured_products %}
+      <div class="col-6 col-md-4 col-lg-3">
+        {% include '_product_card.html' %}
+      </div>
+      {% endfor %}
+    </div>
+    <div class="text-center mt-4 d-md-none">
+      <a href="{{ url_for('shop.shop') }}" class="btn btn-outline-primary">View All Products</a>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<!-- About Blurb -->
+<section class="section-padded">
+  <div class="container">
+    <div class="row align-items-center g-5">
+      <div class="col-lg-6">
+        <div class="about-badge mb-3">🏪 Locally Owned & Operated</div>
+        <h2 class="section-title">Your Neighborhood Value Store</h2>
+        <p class="text-muted mb-4">
+          Smart 99¢ Plus has been serving the West Babylon community with affordable everyday essentials, party supplies, cleaning products, and so much more. We believe everyone deserves quality at prices that won't break the bank.
+        </p>
+        <div class="row g-3 mb-4">
+          <div class="col-6">
+            <div class="stat-card">
+              <div class="stat-number">1000+</div>
+              <div class="stat-label">Products</div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="stat-card">
+              <div class="stat-number">99¢</div>
+              <div class="stat-label">Starting Price</div>
+            </div>
+          </div>
+        </div>
+        <a href="{{ url_for('main.about') }}" class="btn btn-primary">Learn More About Us</a>
+      </div>
+      <div class="col-lg-6">
+        <div class="store-info-card">
+          <h5 class="mb-3"><i class="bi bi-clock me-2 text-primary"></i>Store Hours</h5>
+          <table class="table table-sm table-borderless mb-0">
+            <tbody>
+              <tr><td class="fw-600">Monday – Friday</td><td>9:00 AM – 8:00 PM</td></tr>
+              <tr><td class="fw-600">Saturday</td><td>9:00 AM – 8:00 PM</td></tr>
+              <tr><td class="fw-600">Sunday</td><td>10:00 AM – 6:00 PM</td></tr>
+            </tbody>
+          </table>
+          <hr />
+          <div class="d-flex gap-3">
+            <a href="tel:5168518097" class="btn btn-outline-primary btn-sm flex-grow-1">
+              <i class="bi bi-telephone me-2"></i>Call Us
+            </a>
+            <a href="{{ url_for('main.contact') }}" class="btn btn-primary btn-sm flex-grow-1">
+              <i class="bi bi-envelope me-2"></i>Email Us
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Trust Badges -->
+<section class="trust-strip py-4">
+  <div class="container">
+    <div class="row g-3 text-center">
+      <div class="col-6 col-md-3">
+        <div class="trust-item">
+          <i class="bi bi-shield-check-fill"></i>
+          <span>Secure Checkout</span>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="trust-item">
+          <i class="bi bi-arrow-counterclockwise"></i>
+          <span>Easy Returns</span>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="trust-item">
+          <i class="bi bi-truck"></i>
+          <span>Fast Shipping</span>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="trust-item">
+          <i class="bi bi-headset"></i>
+          <span>Friendly Support</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+{% endblock %}

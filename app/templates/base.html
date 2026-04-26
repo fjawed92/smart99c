@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Smart 99¢ Plus{% endblock %}</title>
+  <meta name="description" content="{% block meta_description %}Smart 99¢ Plus — Your neighborhood value store in West Babylon, NY. Shop online or visit us in-store!{% endblock %}" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+  <!-- Announcement Bar -->
+  {% if announcement %}
+  <div class="announcement-bar">
+    <div class="container text-center">
+      <i class="bi bi-megaphone-fill me-2"></i>{{ announcement }}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-light sticky-top" id="mainNav">
+    <div class="container">
+      <!-- Logo -->
+      <a class="navbar-brand" href="{{ url_for('main.index') }}">
+        <span class="brand-smart">Smart</span>
+        <span class="brand-99">99¢</span>
+        <span class="brand-plus">Plus</span>
+      </a>
+
+      <!-- Mobile icons -->
+      <div class="d-flex align-items-center d-lg-none gap-2 ms-auto me-2">
+        <a href="{{ url_for('shop.shop') }}" class="nav-icon-btn"><i class="bi bi-search"></i></a>
+        <a href="{{ url_for('auth.login') if not current_user.is_authenticated else url_for('orders.account') }}" class="nav-icon-btn"><i class="bi bi-person"></i></a>
+        <button class="nav-icon-btn cart-toggle-btn position-relative" type="button">
+          <i class="bi bi-bag"></i>
+          <span class="cart-badge" id="cartBadge">{{ cart_count }}</span>
+        </button>
+      </div>
+
+      <!-- Hamburger -->
+      <button class="navbar-toggler border-0 shadow-none" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <!-- Nav links -->
+      <div class="collapse navbar-collapse" id="navMenu">
+        <ul class="navbar-nav mx-auto gap-1">
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('main.index') }}">Home</a></li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="{{ url_for('shop.shop') }}" id="shopDropdown" role="button" data-bs-toggle="dropdown">
+              Shop
+            </a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="{{ url_for('shop.shop') }}">All Products</a></li>
+              {% if nav_categories %}
+              <li><hr class="dropdown-divider" /></li>
+              {% for cat in nav_categories %}
+              <li><a class="dropdown-item" href="{{ url_for('shop.shop_category', category_slug=cat.slug) }}">{{ cat.name }}</a></li>
+              {% endfor %}
+              {% endif %}
+            </ul>
+          </li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('main.about') }}">About</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('main.contact') }}">Contact</a></li>
+        </ul>
+
+        <!-- Desktop right icons -->
+        <div class="d-none d-lg-flex align-items-center gap-2">
+          <a href="{{ url_for('shop.shop') }}" class="nav-icon-btn" title="Search"><i class="bi bi-search"></i></a>
+          {% if current_user.is_authenticated %}
+          <div class="dropdown">
+            <button class="nav-icon-btn dropdown-toggle" data-bs-toggle="dropdown" title="Account">
+              <i class="bi bi-person"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><a class="dropdown-item" href="{{ url_for('orders.account') }}"><i class="bi bi-person-circle me-2"></i>My Account</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('orders.order_list') }}"><i class="bi bi-bag-check me-2"></i>My Orders</a></li>
+              {% if current_user.is_admin %}
+              <li><hr class="dropdown-divider" /></li>
+              <li><a class="dropdown-item text-primary" href="{{ url_for('admin.dashboard') }}"><i class="bi bi-speedometer2 me-2"></i>Admin Panel</a></li>
+              {% endif %}
+              <li><hr class="dropdown-divider" /></li>
+              <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}"><i class="bi bi-box-arrow-right me-2"></i>Log Out</a></li>
+            </ul>
+          </div>
+          {% else %}
+          <a href="{{ url_for('auth.login') }}" class="nav-icon-btn" title="Login"><i class="bi bi-person"></i></a>
+          {% endif %}
+          <button class="nav-icon-btn cart-toggle-btn position-relative" type="button" title="Cart">
+            <i class="bi bi-bag"></i>
+            <span class="cart-badge" id="cartBadgeDesktop">{{ cart_count }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Flash Messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="flash-container">
+    <div class="container">
+      {% for category, message in messages %}
+      <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% endwith %}
+
+  <!-- Main Content -->
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="row gy-4">
+        <div class="col-lg-4">
+          <div class="footer-brand mb-3">
+            <span class="brand-smart">Smart</span>
+            <span class="brand-99">99¢</span>
+            <span class="brand-plus">Plus</span>
+          </div>
+          <p class="text-muted small">Your favorite neighborhood value store. Quality products at unbeatable prices, online and in-store.</p>
+          <div class="social-links mt-3">
+            <a href="#" class="social-link" aria-label="Facebook"><i class="bi bi-facebook"></i></a>
+            <a href="#" class="social-link" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
+            <a href="#" class="social-link" aria-label="TikTok"><i class="bi bi-tiktok"></i></a>
+          </div>
+        </div>
+
+        <div class="col-lg-2 col-6">
+          <h6 class="footer-heading">Shop</h6>
+          <ul class="footer-links">
+            <li><a href="{{ url_for('shop.shop') }}">All Products</a></li>
+            {% for cat in nav_categories[:5] %}
+            <li><a href="{{ url_for('shop.shop_category', category_slug=cat.slug) }}">{{ cat.name }}</a></li>
+            {% endfor %}
+          </ul>
+        </div>
+
+        <div class="col-lg-2 col-6">
+          <h6 class="footer-heading">Help</h6>
+          <ul class="footer-links">
+            <li><a href="{{ url_for('main.about') }}">About Us</a></li>
+            <li><a href="{{ url_for('main.contact') }}">Contact</a></li>
+            <li><a href="{{ url_for('orders.order_list') if current_user.is_authenticated else url_for('auth.login') }}">Track Order</a></li>
+            <li><a href="#">Returns Policy</a></li>
+            <li><a href="#">Shipping Info</a></li>
+          </ul>
+        </div>
+
+        <div class="col-lg-4">
+          <h6 class="footer-heading">Visit Us</h6>
+          <address class="text-muted small mb-2">
+            <i class="bi bi-geo-alt-fill text-primary me-2"></i>
+            66 NY-109, West Babylon, NY 11704
+          </address>
+          <p class="text-muted small mb-2">
+            <i class="bi bi-telephone-fill text-primary me-2"></i>
+            <a href="tel:5168518097" class="text-muted text-decoration-none">516-851-8097</a>
+          </p>
+          <p class="text-muted small mb-2">
+            <i class="bi bi-globe text-primary me-2"></i>
+            <a href="https://smart99c.com" class="text-muted text-decoration-none">Smart99c.com</a>
+          </p>
+          <iframe
+            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3023.1234567890!2d-73.3456789!3d40.7123456!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zNDDCsDQyJzQ0LjQiTiA3M8KwMjAnNDQuNCJX!5e0!3m2!1sen!2sus!4v1234567890"
+            width="100%" height="120" style="border:0;border-radius:8px;" allowfullscreen="" loading="lazy"
+            referrerpolicy="no-referrer-when-downgrade" title="Store Location"></iframe>
+        </div>
+      </div>
+
+      <hr class="footer-divider" />
+
+      <div class="row align-items-center">
+        <div class="col-md-6 text-center text-md-start">
+          <p class="text-muted small mb-0">&copy; {{ now().year if now else 2025 }} Smart 99¢ Plus. All rights reserved.</p>
+        </div>
+        <div class="col-md-6 text-center text-md-end">
+          <img src="https://upload.wikimedia.org/wikipedia/commons/b/ba/Stripe_Logo%2C_revised_2016.svg" alt="Stripe" height="22" class="me-2 opacity-50" />
+          <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/200px-Mastercard-logo.svg.png" alt="Mastercard" height="22" class="me-2 opacity-50" />
+          <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Visa_Inc._logo.svg/200px-Visa_Inc._logo.svg.png" alt="Visa" height="22" class="opacity-50" />
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Cart Drawer -->
+  <div class="cart-drawer-overlay" id="cartOverlay"></div>
+  <div class="cart-drawer" id="cartDrawer">
+    <div class="cart-drawer-header">
+      <h5 class="mb-0"><i class="bi bi-bag me-2"></i>Your Cart</h5>
+      <button class="cart-close-btn" id="cartCloseBtn"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="cart-drawer-body" id="cartDrawerBody">
+      <div class="text-center py-5 text-muted" id="cartEmptyMsg">
+        <i class="bi bi-bag-x" style="font-size:3rem;"></i>
+        <p class="mt-3">Your cart is empty</p>
+        <a href="{{ url_for('shop.shop') }}" class="btn btn-primary btn-sm">Start Shopping</a>
+      </div>
+    </div>
+    <div class="cart-drawer-footer d-none" id="cartDrawerFooter">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <strong>Subtotal</strong>
+        <strong class="text-primary fs-5" id="drawerSubtotal">$0.00</strong>
+      </div>
+      <a href="{{ url_for('cart.cart') }}" class="btn btn-outline-dark w-100 mb-2">View Cart</a>
+      <a href="{{ url_for('checkout.checkout') }}" class="btn btn-primary w-100">Checkout</a>
+      <p class="text-muted text-center small mt-2 mb-0">Taxes & shipping calculated at checkout</p>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Custom JS -->
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>
