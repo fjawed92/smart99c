@@ -8,7 +8,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 from flask_login import login_required, current_user
 from flask_wtf import FlaskForm
 from wtforms import (StringField, TextAreaField, DecimalField, IntegerField,
-                     BooleanField, SelectField, FileField, validators)
+                     BooleanField, SelectField, FileField, PasswordField, validators)
 from app.extensions import db
 from app.models import (Product, ProductImage, Category, Order, User,
                         ShippingRate, SiteSettings)
@@ -382,6 +382,26 @@ def update_order_status(order_id):
 
 # ─── Users ───────────────────────────────────────────────────────────────────
 
+class UserCreateForm(FlaskForm):
+    first_name = StringField('First Name', [validators.DataRequired(), validators.Length(max=100)])
+    last_name = StringField('Last Name', [validators.DataRequired(), validators.Length(max=100)])
+    email = StringField('Email', [validators.DataRequired(), validators.Email(), validators.Length(max=255)])
+    password = PasswordField('Password', [validators.DataRequired(), validators.Length(min=8)])
+    is_admin = BooleanField('Admin', default=False)
+    is_active = BooleanField('Active', default=True)
+    force_password_change = BooleanField('Require Password Change on Next Login', default=True)
+
+
+class UserEditForm(FlaskForm):
+    first_name = StringField('First Name', [validators.DataRequired(), validators.Length(max=100)])
+    last_name = StringField('Last Name', [validators.DataRequired(), validators.Length(max=100)])
+    email = StringField('Email', [validators.DataRequired(), validators.Email(), validators.Length(max=255)])
+    new_password = PasswordField('New Password', [validators.Optional(), validators.Length(min=8)])
+    is_admin = BooleanField('Admin', default=False)
+    is_active = BooleanField('Active', default=True)
+    force_password_change = BooleanField('Require Password Change on Next Login', default=False)
+
+
 @admin_bp.route('/users')
 @admin_required
 def users():
@@ -403,12 +423,95 @@ def users():
                            search=search)
 
 
+@admin_bp.route('/users/new', methods=['GET', 'POST'])
+@admin_required
+def new_user():
+    form = UserCreateForm()
+    if form.validate_on_submit():
+        email = form.email.data.lower().strip()
+        if User.query.filter_by(email=email).first():
+            flash('An account with that email already exists.', 'error')
+            return render_template('admin/user_form.html', form=form, user=None)
+
+        user = User(
+            email=email,
+            first_name=form.first_name.data.strip(),
+            last_name=form.last_name.data.strip(),
+            is_admin=form.is_admin.data,
+            is_active=form.is_active.data,
+            force_password_change=form.force_password_change.data,
+        )
+        user.set_password(form.password.data)
+        db.session.add(user)
+        db.session.commit()
+        flash(f'User "{user.full_name}" created!', 'success')
+        return redirect(url_for('admin.user_detail', user_id=user.id))
+
+    return render_template('admin/user_form.html', form=form, user=None)
+
+
 @admin_bp.route('/users/<int:user_id>')
 @admin_required
 def user_detail(user_id):
     user = User.query.get_or_404(user_id)
     orders = Order.query.filter_by(user_id=user_id).order_by(Order.created_at.desc()).all()
     return render_template('admin/user_detail.html', user=user, orders=orders)
+
+
+@admin_bp.route('/users/<int:user_id>/edit', methods=['GET', 'POST'])
+@admin_required
+def edit_user(user_id):
+    user = User.query.get_or_404(user_id)
+    form = UserEditForm(obj=user)
+
+    if form.validate_on_submit():
+        new_email = form.email.data.lower().strip()
+        if new_email != user.email:
+            existing = User.query.filter_by(email=new_email).first()
+            if existing and existing.id != user.id:
+                flash('An account with that email already exists.', 'error')
+                return render_template('admin/user_form.html', form=form, user=user)
+            user.email = new_email
+
+        user.first_name = form.first_name.data.strip()
+        user.last_name = form.last_name.data.strip()
+
+        if user.id != current_user.id:
+            user.is_admin = form.is_admin.data
+            user.is_active = form.is_active.data
+
+        user.force_password_change = form.force_password_change.data
+
+        if form.new_password.data:
+            user.set_password(form.new_password.data)
+
+        db.session.commit()
+        flash(f'User "{user.full_name}" updated!', 'success')
+        return redirect(url_for('admin.user_detail', user_id=user.id))
+
+    return render_template('admin/user_form.html', form=form, user=user)
+
+
+@admin_bp.route('/users/<int:user_id>/delete', methods=['POST'])
+@admin_required
+def delete_user(user_id):
+    user = User.query.get_or_404(user_id)
+    if user.id == current_user.id:
+        flash('You cannot delete your own account.', 'error')
+        return redirect(url_for('admin.user_detail', user_id=user.id))
+
+    has_orders = Order.query.filter_by(user_id=user.id).first() is not None
+    if has_orders:
+        user.is_active = False
+        db.session.commit()
+        flash(f'User "{user.full_name}" has existing orders and was deactivated instead of deleted.', 'warning')
+        return redirect(url_for('admin.users'))
+
+    name = user.full_name
+    db.session.delete(user)
+    db.session.commit()
+    flash(f'User "{name}" deleted.', 'success')
+    return redirect(url_for('admin.users'))
 
 
 @admin_bp.route('/users/<int:user_id>/toggle-admin', methods=['POST'])
