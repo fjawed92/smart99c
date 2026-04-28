@@ -3,6 +3,13 @@
 {% block page_title %}Customers{% endblock %}
 
 {% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div></div>
+  <a href="{{ url_for('admin.new_user') }}" class="btn btn-primary">
+    <i class="bi bi-person-plus me-1"></i>Add User
+  </a>
+</div>
+
 <div class="card border-0 shadow-sm mb-4">
   <div class="card-body">
     <form method="GET" class="row g-2 align-items-end">
@@ -60,8 +67,17 @@
                        {% if user.id == current_user.id %}disabled title="Cannot deactivate yourself"{% endif %} />
               </div>
             </td>
-            <td>
-              <a href="{{ url_for('admin.user_detail', user_id=user.id) }}" class="btn btn-sm btn-outline-secondary">View</a>
+            <td class="text-end">
+              <div class="btn-group btn-group-sm">
+                <a href="{{ url_for('admin.user_detail', user_id=user.id) }}" class="btn btn-outline-secondary">View</a>
+                <a href="{{ url_for('admin.edit_user', user_id=user.id) }}" class="btn btn-outline-secondary">Edit</a>
+                {% if user.id != current_user.id %}
+                <button type="button" class="btn btn-outline-danger delete-user-btn"
+                        data-user-id="{{ user.id }}" data-user-name="{{ user.full_name }}">
+                  <i class="bi bi-trash"></i>
+                </button>
+                {% endif %}
+              </div>
             </td>
           </tr>
           {% else %}
@@ -106,6 +122,24 @@ document.querySelectorAll('.active-toggle').forEach(toggle => {
     const resp = await fetch(`/admin/users/${uid}/toggle-active`, {method:'POST', headers:{'X-CSRFToken': csrfToken}});
     const data = await resp.json();
     if (!data.success) { this.checked = !this.checked; alert(data.message); }
+  });
+});
+
+document.querySelectorAll('.delete-user-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    const uid = this.dataset.userId;
+    const name = this.dataset.userName;
+    if (!confirm(`Delete user "${name}"?\n\nIf this user has orders they will be deactivated instead.`)) return;
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/admin/users/${uid}/delete`;
+    const token = document.createElement('input');
+    token.type = 'hidden';
+    token.name = 'csrf_token';
+    token.value = csrfToken;
+    form.appendChild(token);
+    document.body.appendChild(form);
+    form.submit();
   });
 });
 </script>

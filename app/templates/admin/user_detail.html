@@ -10,6 +10,21 @@
   <h5 class="mb-0 fw-700">{{ user.full_name }}</h5>
   {% if user.is_admin %}<span class="badge bg-primary ms-2">Admin</span>{% endif %}
   {% if not user.is_active %}<span class="badge bg-secondary ms-2">Inactive</span>{% endif %}
+  <div class="ms-auto d-flex gap-2">
+    <a href="{{ url_for('admin.edit_user', user_id=user.id) }}" class="btn btn-sm btn-outline-primary">
+      <i class="bi bi-pencil me-1"></i>Edit
+    </a>
+    {% if user.id != current_user.id %}
+    <form method="POST" action="{{ url_for('admin.delete_user', user_id=user.id) }}"
+          onsubmit="return confirm('Delete user &quot;{{ user.full_name }}&quot;?\n\nIf this user has orders they will be deactivated instead.');"
+          class="d-inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <button type="submit" class="btn btn-sm btn-outline-danger">
+        <i class="bi bi-trash me-1"></i>Delete
+      </button>
+    </form>
+    {% endif %}
+  </div>
 </div>
 
 <div class="row g-4">

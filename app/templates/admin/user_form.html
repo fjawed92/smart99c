@@ -1,0 +1,97 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}{{ 'Edit User' if user else 'New User' }}{% endblock %}
+{% block page_title %}{{ 'Edit User' if user else 'New User' }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <a href="{{ url_for('admin.users') if not user else url_for('admin.user_detail', user_id=user.id) }}" class="btn btn-sm btn-outline-secondary me-3">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <h5 class="mb-0 fw-700">{{ 'Edit ' + user.full_name if user else 'Create New User' }}</h5>
+</div>
+
+<form method="POST" novalidate>
+  {{ form.hidden_tag() }}
+  <div class="row g-4">
+    <div class="col-lg-8">
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+          <h6 class="fw-700 mb-3">Profile</h6>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">First Name *</label>
+              {{ form.first_name(class="form-control", required=true) }}
+              {% for err in form.first_name.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Last Name *</label>
+              {{ form.last_name(class="form-control", required=true) }}
+              {% for err in form.last_name.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+            </div>
+            <div class="col-12">
+              <label class="form-label">Email *</label>
+              {{ form.email(class="form-control", type="email", required=true) }}
+              {% for err in form.email.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <h6 class="fw-700 mb-3">{{ 'Reset Password' if user else 'Password' }}</h6>
+          {% if user %}
+          <p class="text-muted small mb-2">Leave blank to keep the current password.</p>
+          <div class="mb-3">
+            <label class="form-label">New Password</label>
+            {{ form.new_password(class="form-control", type="password", autocomplete="new-password") }}
+            {% for err in form.new_password.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+            <div class="form-text">Minimum 8 characters.</div>
+          </div>
+          {% else %}
+          <div class="mb-3">
+            <label class="form-label">Password *</label>
+            {{ form.password(class="form-control", type="password", required=true, autocomplete="new-password") }}
+            {% for err in form.password.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+            <div class="form-text">Minimum 8 characters.</div>
+          </div>
+          {% endif %}
+          <div class="form-check">
+            {{ form.force_password_change(class="form-check-input") }}
+            <label class="form-check-label">{{ form.force_password_change.label.text }}</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+          <h6 class="fw-700 mb-3">Status</h6>
+          <div class="form-check form-switch mb-2">
+            {{ form.is_active(class="form-check-input", role="switch", disabled=(user and user.id == current_user.id)) }}
+            <label class="form-check-label">Active</label>
+            {% if user and user.id == current_user.id %}
+            <div class="form-text">You can't deactivate yourself.</div>
+            {% endif %}
+          </div>
+          <div class="form-check form-switch">
+            {{ form.is_admin(class="form-check-input", role="switch", disabled=(user and user.id == current_user.id)) }}
+            <label class="form-check-label">Admin</label>
+            {% if user and user.id == current_user.id %}
+            <div class="form-text">You can't change your own admin status.</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="d-grid gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check-lg me-1"></i>{{ 'Save Changes' if user else 'Create User' }}
+        </button>
+        <a href="{{ url_for('admin.users') }}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}
