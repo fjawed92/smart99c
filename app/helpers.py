@@ -1,5 +1,4 @@
 from flask import session
-from slugify import slugify as _slugify
 
 
 def get_cart_count():
