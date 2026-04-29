@@ -590,9 +590,20 @@ def delete_shipping_rate(rate_id):
 @admin_required
 def settings():
     if request.method == 'POST':
-        keys = ['announcement', 'store_hours', 'tax_rate', 'free_shipping_threshold']
+        keys = [
+            'announcement',
+            'store_hours',
+            'tax_rate',
+            'free_shipping_threshold',
+            'facebook_url',
+            'instagram_url',
+            'tiktok_url',
+            'facebook_active',
+            'instagram_active',
+            'tiktok_active',
+        ]
         for key in keys:
-            value = request.form.get(key, '')
+            value = '1' if key.endswith('_active') and request.form.get(key) == 'on' else request.form.get(key, '')
             setting = SiteSettings.query.filter_by(key=key).first()
             if setting:
                 setting.value = value

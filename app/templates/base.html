@@ -143,11 +143,11 @@
             <span class="brand-99">99¢</span>
             <span class="brand-plus">Plus</span>
           </div>
-          <p class="text-muted small">Your favorite neighborhood value store. Quality products at unbeatable prices, online and in-store.</p>
+          <p class="footer-copy small">Your favorite neighborhood value store. Quality products at unbeatable prices, online and in-store.</p>
           <div class="social-links mt-3">
-            <a href="#" class="social-link" aria-label="Facebook"><i class="bi bi-facebook"></i></a>
-            <a href="#" class="social-link" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
-            <a href="#" class="social-link" aria-label="TikTok"><i class="bi bi-tiktok"></i></a>
+            {% if footer_social.facebook.active and footer_social.facebook.url %}<a href="{{ footer_social.facebook.url }}" class="social-link" target="_blank" rel="noopener noreferrer" aria-label="Facebook"><i class="bi bi-facebook"></i></a>{% endif %}
+            {% if footer_social.instagram.active and footer_social.instagram.url %}<a href="{{ footer_social.instagram.url }}" class="social-link" target="_blank" rel="noopener noreferrer" aria-label="Instagram"><i class="bi bi-instagram"></i></a>{% endif %}
+            {% if footer_social.tiktok.active and footer_social.tiktok.url %}<a href="{{ footer_social.tiktok.url }}" class="social-link" target="_blank" rel="noopener noreferrer" aria-label="TikTok"><i class="bi bi-tiktok"></i></a>{% endif %}
           </div>
         </div>
 
@@ -197,7 +197,7 @@
 
       <div class="row align-items-center">
         <div class="col-md-6 text-center text-md-start">
-          <p class="text-muted small mb-0">&copy; {{ now().year if now else 2025 }} Smart 99¢ Plus. All rights reserved.</p>
+          <p class="footer-legal small mb-0">&copy; {{ now().year if now else 2025 }} Smart 99¢ Plus. All rights reserved.</p>
         </div>
         <div class="col-md-6 text-center text-md-end">
           <img src="https://upload.wikimedia.org/wikipedia/commons/b/ba/Stripe_Logo%2C_revised_2016.svg" alt="Stripe" height="22" class="me-2 opacity-50" />

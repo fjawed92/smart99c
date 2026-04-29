@@ -61,6 +61,57 @@
         </div>
       </div>
 
+
+
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 pt-3">
+          <h6 class="fw-700 mb-0">Footer Social Media</h6>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Facebook URL</label>
+              <input type="url" name="facebook_url" class="form-control"
+                     value="{{ settings.get('facebook_url', '') }}"
+                     placeholder="https://facebook.com/yourpage" />
+            </div>
+            <div class="col-md-6 d-flex align-items-end">
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" id="facebook_active" name="facebook_active" {% if settings.get('facebook_active', '1') == '1' %}checked{% endif %}>
+                <label class="form-check-label" for="facebook_active">Show Facebook in footer</label>
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Instagram URL</label>
+              <input type="url" name="instagram_url" class="form-control"
+                     value="{{ settings.get('instagram_url', '') }}"
+                     placeholder="https://instagram.com/yourhandle" />
+            </div>
+            <div class="col-md-6 d-flex align-items-end">
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" id="instagram_active" name="instagram_active" {% if settings.get('instagram_active', '1') == '1' %}checked{% endif %}>
+                <label class="form-check-label" for="instagram_active">Show Instagram in footer</label>
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">TikTok URL</label>
+              <input type="url" name="tiktok_url" class="form-control"
+                     value="{{ settings.get('tiktok_url', '') }}"
+                     placeholder="https://tiktok.com/@yourhandle" />
+            </div>
+            <div class="col-md-6 d-flex align-items-end">
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" id="tiktok_active" name="tiktok_active" {% if settings.get('tiktok_active', '1') == '1' %}checked{% endif %}>
+                <label class="form-check-label" for="tiktok_active">Show TikTok in footer</label>
+              </div>
+            </div>
+          </div>
+          <small class="text-muted d-block mt-2">Leave a URL blank to keep icon hidden even if enabled.</small>
+        </div>
+      </div>
+
       <div class="text-end">
         <button type="submit" class="btn btn-primary btn-lg">
           <i class="bi bi-check-lg me-2"></i>Save Settings
