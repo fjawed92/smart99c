@@ -65,10 +65,25 @@ def create_app(config_name='default'):
         cart_count = get_cart_count()
         announcement = get_site_setting('announcement', '')
         categories = Category.query.filter_by(is_active=True).order_by(Category.name).all()
+        footer_social = {
+            'facebook': {
+                'url': get_site_setting('facebook_url', ''),
+                'active': get_site_setting('facebook_active', '1') == '1',
+            },
+            'instagram': {
+                'url': get_site_setting('instagram_url', ''),
+                'active': get_site_setting('instagram_active', '1') == '1',
+            },
+            'tiktok': {
+                'url': get_site_setting('tiktok_url', ''),
+                'active': get_site_setting('tiktok_active', '1') == '1',
+            },
+        }
         return dict(
             cart_count=cart_count,
             announcement=announcement,
             nav_categories=categories,
+            footer_social=footer_social,
             stripe_public_key=app.config.get('STRIPE_PUBLIC_KEY', ''),
         )
 

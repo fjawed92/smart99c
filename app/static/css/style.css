@@ -889,6 +889,21 @@ a:hover { color: var(--primary-dark); }
 }
 .social-link:hover { background: var(--primary); color: #fff; }
 
+.footer-copy,
+.site-footer .text-muted,
+.footer-legal {
+  color: rgba(255,255,255,.86) !important;
+}
+
+.site-footer a.text-muted {
+  color: rgba(255,255,255,.86) !important;
+}
+
+.site-footer .opacity-50 {
+  opacity: .85 !important;
+}
+
+
 /* ── Admin Stat Icons ────────────────────────────────────────── */
 .stat-icon {
   width: 44px; height: 44px;
