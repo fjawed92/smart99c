@@ -103,7 +103,11 @@ def create_payment_intent():
 def confirm_order():
     data = request.get_json() or request.form
     payment_intent_id = data.get('payment_intent_id')
-    shipping_rate_id = data.get('shipping_rate_id', type=int) or int(data.get('shipping_rate_id', 0))
+    shipping_rate_value = data.get('shipping_rate_id', 0)
+    try:
+        shipping_rate_id = int(shipping_rate_value or 0)
+    except (TypeError, ValueError):
+        shipping_rate_id = 0
 
     items = get_cart_items()
     if not items:

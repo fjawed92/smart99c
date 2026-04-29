@@ -243,14 +243,31 @@ document.getElementById('checkoutForm').addEventListener('submit', async functio
 
   const formData = new FormData(this);
 
-  const {error, paymentIntent} = await stripe.confirmPayment({
-    elements,
-    confirmParams: {return_url: window.location.origin + '/order/confirmation/PENDING'},
-    redirect: 'if_required'
-  });
+  let paymentIntent;
+  try {
+    const stripeResult = await stripe.confirmPayment({
+      elements,
+      confirmParams: {return_url: window.location.origin + '/order/confirmation/PENDING'},
+      redirect: 'if_required'
+    });
 
-  if (error) {
-    showError(error.message);
+    if (stripeResult.error) {
+      showError(stripeResult.error.message);
+      btn.disabled = false;
+      document.getElementById('submitText').classList.remove('d-none');
+      document.getElementById('submitSpinner').classList.add('d-none');
+      return;
+    }
+    paymentIntent = stripeResult.paymentIntent;
+    if (!paymentIntent || !paymentIntent.id) {
+      showError('Payment confirmation is still pending. Please wait a moment and try again.');
+      btn.disabled = false;
+      document.getElementById('submitText').classList.remove('d-none');
+      document.getElementById('submitSpinner').classList.add('d-none');
+      return;
+    }
+  } catch (err) {
+    showError(err.message || 'Could not confirm payment. Please try again.');
     btn.disabled = false;
     document.getElementById('submitText').classList.remove('d-none');
     document.getElementById('submitSpinner').classList.add('d-none');
