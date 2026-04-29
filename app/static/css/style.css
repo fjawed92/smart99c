@@ -988,3 +988,7 @@ a:hover { color: var(--primary-dark); }
   .section-padded { padding: 3rem 0; }
   .auth-card { padding: 1.5rem; border-radius: 14px; }
 }
+
+.footer-payment-logo {
+  filter: brightness(0) invert(1);
+}

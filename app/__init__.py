@@ -1,4 +1,5 @@
 import cloudinary
+from datetime import datetime
 from flask import Flask
 from config import config
 from app.extensions import db, login_manager, migrate, csrf, mail
@@ -85,6 +86,7 @@ def create_app(config_name='default'):
             nav_categories=categories,
             footer_social=footer_social,
             stripe_public_key=app.config.get('STRIPE_PUBLIC_KEY', ''),
+            current_year=datetime.utcnow().year,
         )
 
     return app
