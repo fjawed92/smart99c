@@ -49,7 +49,7 @@ function updateCartBadges(count) {
 
 // ── Add to Cart ──────────────────────────────────────────────
 
-async function addToCart(productId, quantity = 1) {
+async function addToCart(productId, quantity = 1, variantId = 0) {
   try {
     const resp = await fetch('/cart/add', {
       method: 'POST',
@@ -57,7 +57,11 @@ async function addToCart(productId, quantity = 1) {
         'Content-Type': 'application/json',
         'X-CSRFToken': getCsrfToken(),
       },
-      body: JSON.stringify({ product_id: productId, quantity }),
+      body: JSON.stringify({
+        product_id: productId,
+        variant_id: variantId || 0,
+        quantity,
+      }),
     });
 
     const data = await resp.json();
@@ -85,12 +89,20 @@ document.addEventListener('click', function (e) {
     ? parseInt(document.getElementById(qtyInputId)?.value || 1, 10)
     : 1;
 
+  // variant_id can come from a sibling hidden input or a data attribute that
+  // the swatch JS updates on selection
+  let variantId = parseInt(btn.dataset.variantId || '0', 10) || 0;
+  const variantInput = document.getElementById('selectedVariantId');
+  if (variantInput && variantInput.value) {
+    variantId = parseInt(variantInput.value, 10) || 0;
+  }
+
   // Visual feedback
   const original = btn.innerHTML;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Adding…';
   btn.disabled = true;
 
-  addToCart(productId, quantity).finally(() => {
+  addToCart(productId, quantity, variantId).finally(() => {
     btn.innerHTML = original;
     btn.disabled = false;
   });
@@ -120,33 +132,39 @@ async function refreshCartDrawer() {
       return;
     }
 
-    body.innerHTML = data.items.map(item => `
-      <div class="drawer-cart-item" id="drawerItem${item.product_id}">
+    body.innerHTML = data.items.map(item => {
+      const keyAttr = String(item.line_key).replace(/:/g, '_');
+      const colorChip = item.color
+        ? `<span class="drawer-item-color"><span class="drawer-item-color-dot" style="background:${escAttr(item.color_hex || '#ccc')};"></span>${escHtml(item.color)}</span>`
+        : '';
+      return `
+      <div class="drawer-cart-item" id="drawerItem_${keyAttr}">
         ${item.image_url
-          ? `<img src="${item.image_url}" alt="${escHtml(item.name)}" class="drawer-item-img" />`
+          ? `<img src="${escAttr(item.image_url)}" alt="${escHtml(item.name)}" class="drawer-item-img" />`
           : `<div class="drawer-item-img" style="display:flex;align-items:center;justify-content:center;"><i class="bi bi-image text-muted"></i></div>`
         }
         <div class="drawer-item-info">
           <div class="drawer-item-name">${escHtml(item.name)}</div>
+          ${colorChip}
           <div class="drawer-item-price">$${item.unit_price.toFixed(2)}</div>
           <div class="d-flex align-items-center gap-2 mt-1">
             <div class="quantity-selector" style="border-radius:7px;">
-              <button class="qty-btn drawer-qty-minus" data-product-id="${item.product_id}" style="padding:.25rem .5rem;font-size:.85rem;">
+              <button class="qty-btn drawer-qty-minus" data-line-key="${escAttr(item.line_key)}" style="padding:.25rem .5rem;font-size:.85rem;">
                 <i class="bi bi-dash"></i>
               </button>
               <span style="padding:0 .4rem;font-size:.85rem;font-weight:700;">${item.quantity}</span>
-              <button class="qty-btn drawer-qty-plus" data-product-id="${item.product_id}" style="padding:.25rem .5rem;font-size:.85rem;">
+              <button class="qty-btn drawer-qty-plus" data-line-key="${escAttr(item.line_key)}" style="padding:.25rem .5rem;font-size:.85rem;">
                 <i class="bi bi-plus"></i>
               </button>
             </div>
             <span class="text-muted small">$${(item.unit_price * item.quantity).toFixed(2)}</span>
           </div>
         </div>
-        <button class="drawer-item-remove" data-product-id="${item.product_id}" title="Remove">
+        <button class="drawer-item-remove" data-line-key="${escAttr(item.line_key)}" title="Remove">
           <i class="bi bi-x-lg"></i>
         </button>
       </div>
-    `).join('');
+    `;}).join('');
 
     if (footer) {
       footer.classList.remove('d-none');
@@ -166,26 +184,27 @@ document.addEventListener('click', async function (e) {
   const removeBtn = e.target.closest('.drawer-item-remove');
 
   if (minusBtn || plusBtn) {
-    const productId = (minusBtn || plusBtn).dataset.productId;
-    const row = document.getElementById(`drawerItem${productId}`);
+    const lineKey = (minusBtn || plusBtn).dataset.lineKey;
+    const keyAttr = String(lineKey).replace(/:/g, '_');
+    const row = document.getElementById(`drawerItem_${keyAttr}`);
     const qtyEl = row?.querySelector('span[style]');
     if (!qtyEl) return;
     const currentQty = parseInt(qtyEl.textContent, 10);
     const newQty = minusBtn ? currentQty - 1 : currentQty + 1;
-    await updateCartQty(productId, newQty);
+    await updateCartQty(lineKey, newQty);
     return;
   }
 
   if (removeBtn) {
-    await updateCartQty(removeBtn.dataset.productId, 0);
+    await updateCartQty(removeBtn.dataset.lineKey, 0);
   }
 });
 
-async function updateCartQty(productId, quantity) {
+async function updateCartQty(lineKey, quantity) {
   const endpoint = quantity <= 0 ? '/cart/remove' : '/cart/update';
   const body = quantity <= 0
-    ? { product_id: productId }
-    : { product_id: productId, quantity };
+    ? { line_key: lineKey }
+    : { line_key: lineKey, quantity };
 
   const resp = await fetch(endpoint, {
     method: 'POST',
@@ -197,7 +216,7 @@ async function updateCartQty(productId, quantity) {
     updateCartBadges(data.cart_count);
     refreshCartDrawer();
     // Also update cart page if open
-    updateCartPageTotals(data);
+    updateCartPageTotals(data, lineKey);
   }
 }
 
@@ -206,7 +225,7 @@ async function updateCartQty(productId, quantity) {
 // Cart page qty inputs
 document.querySelectorAll('.cart-qty-input').forEach(input => {
   input.addEventListener('change', function () {
-    updateCartQty(this.dataset.productId, parseInt(this.value, 10));
+    updateCartQty(this.dataset.lineKey, parseInt(this.value, 10));
   });
 });
 
@@ -216,19 +235,19 @@ document.addEventListener('click', function (e) {
   const plus  = e.target.closest('.cart-table .qty-plus');
   if (!minus && !plus) return;
 
-  const productId = (minus || plus).dataset.productId;
-  const input = document.querySelector(`.cart-qty-input[data-product-id="${productId}"]`);
+  const lineKey = (minus || plus).dataset.lineKey;
+  const input = document.querySelector(`.cart-qty-input[data-line-key="${lineKey}"]`);
   if (!input) return;
 
   const currentVal = parseInt(input.value, 10);
   if (minus && currentVal > 1) {
     input.value = currentVal - 1;
-    updateCartQty(productId, currentVal - 1);
+    updateCartQty(lineKey, currentVal - 1);
   } else if (plus) {
     const max = parseInt(input.max, 10) || 99;
     if (currentVal < max) {
       input.value = currentVal + 1;
-      updateCartQty(productId, currentVal + 1);
+      updateCartQty(lineKey, currentVal + 1);
     }
   }
 });
@@ -236,24 +255,25 @@ document.addEventListener('click', function (e) {
 // Remove from cart page
 document.querySelectorAll('.remove-from-cart-btn').forEach(btn => {
   btn.addEventListener('click', async function () {
-    const productId = this.dataset.productId;
-    const row = document.getElementById(`cartRow${productId}`);
+    const lineKey = this.dataset.lineKey;
+    const keyAttr = String(lineKey).replace(/:/g, '_');
+    const row = document.getElementById(`cartRow_${keyAttr}`);
     row?.classList.add('opacity-50');
     const resp = await fetch('/cart/remove', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
-      body: JSON.stringify({ product_id: productId }),
+      body: JSON.stringify({ line_key: lineKey }),
     });
     const data = await resp.json();
     if (data.success) {
       row?.remove();
       updateCartBadges(data.cart_count);
-      updateCartPageTotals(data);
+      updateCartPageTotals(data, lineKey);
     }
   });
 });
 
-function updateCartPageTotals(data) {
+function updateCartPageTotals(data, lineKey) {
   const subtotalEl = document.getElementById('cartSubtotal');
   const totalEl    = document.getElementById('cartTotal');
   if (subtotalEl && data.subtotal !== undefined) {
@@ -262,11 +282,15 @@ function updateCartPageTotals(data) {
   if (totalEl && data.subtotal !== undefined) {
     totalEl.textContent = `$${parseFloat(data.subtotal).toFixed(2)}`;
   }
-  if (data.item_total !== undefined) {
-    const productId = data.product_id;
-    const itemTotalEl = productId ? document.getElementById(`itemTotal${productId}`) : null;
+  if (data.item_total !== undefined && lineKey) {
+    const keyAttr = String(lineKey).replace(/:/g, '_');
+    const itemTotalEl = document.getElementById(`itemTotal_${keyAttr}`);
     if (itemTotalEl) itemTotalEl.textContent = `$${parseFloat(data.item_total).toFixed(2)}`;
   }
+}
+
+function escAttr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
 
 // ── Drawer Cart JSON endpoint ─────────────────────────────────

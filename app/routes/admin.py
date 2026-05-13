@@ -4,14 +4,14 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from functools import wraps
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   flash, jsonify, abort, current_app)
+                   flash, jsonify, abort, current_app, send_file)
 from flask_login import login_required, current_user
 from flask_wtf import FlaskForm
 from wtforms import (StringField, TextAreaField, DecimalField, IntegerField,
                      BooleanField, SelectField, FileField, PasswordField, validators)
 from app.extensions import db
-from app.models import (Product, ProductImage, Category, Order, User,
-                        ShippingRate, SiteSettings)
+from app.models import (Product, ProductImage, ProductVariant, Category, Order,
+                        OrderItem, User, ShippingRate, SiteSettings)
 from app.helpers import generate_slug
 
 admin_bp = Blueprint('admin', __name__)
@@ -205,6 +205,107 @@ def toggle_product(product_id):
                     'message': f'Product {state}.'})
 
 
+@admin_bp.route('/products/bulk-action', methods=['POST'])
+@admin_required
+def bulk_product_action(action=None):
+    action = request.form.get('action', '')
+    ids = request.form.getlist('product_ids')
+    try:
+        ids = [int(i) for i in ids if str(i).isdigit()]
+    except ValueError:
+        ids = []
+    if not ids:
+        flash('Select at least one product.', 'error')
+        return redirect(request.referrer or url_for('admin.products'))
+
+    products = Product.query.filter(Product.id.in_(ids)).all()
+    if action == 'activate':
+        for p in products:
+            p.is_active = True
+        db.session.commit()
+        flash(f'Activated {len(products)} product(s).', 'success')
+    elif action == 'deactivate':
+        for p in products:
+            p.is_active = False
+        db.session.commit()
+        flash(f'Deactivated {len(products)} product(s).', 'success')
+    elif action == 'feature':
+        for p in products:
+            p.is_featured = True
+        db.session.commit()
+        flash(f'Featured {len(products)} product(s).', 'success')
+    elif action == 'unfeature':
+        for p in products:
+            p.is_featured = False
+        db.session.commit()
+        flash(f'Unfeatured {len(products)} product(s).', 'success')
+    elif action == 'delete':
+        # Soft delete: same as the per-row Delete button (deactivate).
+        for p in products:
+            p.is_active = False
+        db.session.commit()
+        flash(f'Deactivated {len(products)} product(s).', 'success')
+    else:
+        flash('Unknown action.', 'error')
+
+    return redirect(request.referrer or url_for('admin.products'))
+
+
+@admin_bp.route('/orders/export', methods=['GET'])
+@admin_required
+def orders_export():
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from io import BytesIO
+    from app.models import ShippingAddress
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Orders'
+
+    header = ['Order #', 'Date', 'Status', 'Customer', 'Email', 'Phone',
+              'Items', 'Subtotal', 'Tax', 'Shipping', 'Total', 'Payment Intent']
+    for i, h in enumerate(header, start=1):
+        c = ws.cell(row=1, column=i, value=h)
+        c.font = Font(bold=True, color='FFFFFF')
+        c.fill = PatternFill('solid', fgColor='E8334A')
+        c.alignment = Alignment(horizontal='left', vertical='center')
+
+    widths = [14, 18, 12, 24, 28, 16, 50, 10, 10, 11, 10, 32]
+    for i, w in enumerate(widths, start=1):
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
+
+    orders = Order.query.order_by(Order.created_at.desc()).all()
+    for o in orders:
+        items_str = '; '.join(
+            f'{i.display_name} x{i.quantity} @ ${i.unit_price}' for i in o.items
+        )
+        addr = o.shipping_address
+        ws.append([
+            o.order_number,
+            o.created_at.strftime('%Y-%m-%d %H:%M') if o.created_at else '',
+            o.status,
+            addr.full_name if addr else (o.user.full_name if o.user else ''),
+            addr.email if addr else (o.user.email if o.user else ''),
+            addr.phone if addr else '',
+            items_str,
+            float(o.subtotal or 0),
+            float(o.tax or 0),
+            float(o.shipping_cost or 0),
+            float(o.total or 0),
+            o.stripe_payment_intent_id or '',
+        ])
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    stamp = datetime.utcnow().strftime('%Y%m%d')
+    return send_file(buf,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                     as_attachment=True,
+                     download_name=f'smart99c-orders-{stamp}.xlsx')
+
+
 @admin_bp.route('/products/<int:product_id>/images/<int:image_id>/delete', methods=['POST'])
 @admin_required
 def delete_product_image(product_id, image_id):
@@ -219,8 +320,12 @@ def delete_product_image(product_id, image_id):
     return jsonify({'success': True})
 
 
-def _handle_image_uploads(product, files):
-    is_first = not product.images
+def _handle_image_uploads(product, files, variant=None):
+    """Upload Cloudinary images and attach them to a product (and optionally a variant)."""
+    scope_images = variant.images if variant is not None else [
+        i for i in product.images if i.variant_id is None
+    ]
+    is_first = not scope_images
     for f in files:
         if f and f.filename:
             try:
@@ -231,15 +336,186 @@ def _handle_image_uploads(product, files):
                 )
                 img = ProductImage(
                     product_id=product.id,
+                    variant_id=variant.id if variant else None,
                     image_url=result['secure_url'],
                     cloudinary_public_id=result['public_id'],
-                    is_primary=is_first,
+                    is_primary=is_first if variant is None else False,
                     sort_order=len(product.images),
                 )
                 db.session.add(img)
                 is_first = False
             except Exception as e:
                 flash(f'Image upload failed: {str(e)}', 'warning')
+
+
+# ─── Product Variants ────────────────────────────────────────────────────────
+
+def _parse_decimal(value):
+    if value in (None, '', 'None'):
+        return None
+    try:
+        return Decimal(str(value).strip())
+    except Exception:
+        return None
+
+
+def _parse_int(value, default=0):
+    if value in (None, '', 'None'):
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+@admin_bp.route('/products/<int:product_id>/variants', methods=['POST'])
+@admin_required
+def create_variant(product_id):
+    product = Product.query.get_or_404(product_id)
+    color_name = (request.form.get('color_name') or '').strip()
+    if not color_name:
+        flash('Color name is required.', 'error')
+        return redirect(url_for('admin.edit_product', product_id=product_id))
+
+    color_hex = (request.form.get('color_hex') or '').strip() or None
+    sku = (request.form.get('sku') or '').strip() or None
+    if sku and ProductVariant.query.filter_by(sku=sku).first():
+        flash(f'SKU "{sku}" is already in use.', 'error')
+        return redirect(url_for('admin.edit_product', product_id=product_id))
+
+    variant = ProductVariant(
+        product_id=product.id,
+        color_name=color_name,
+        color_hex=color_hex,
+        sku=sku,
+        price_override=_parse_decimal(request.form.get('price_override')),
+        cost_price=_parse_decimal(request.form.get('cost_price')),
+        stock_quantity=max(0, _parse_int(request.form.get('stock_quantity'), 0)),
+        is_active=request.form.get('is_active') == 'on',
+        sort_order=_parse_int(request.form.get('sort_order'), 0),
+    )
+    db.session.add(variant)
+    db.session.flush()
+
+    files = request.files.getlist('variant_images')
+    _handle_image_uploads(product, files, variant=variant)
+
+    db.session.commit()
+    flash(f'Color "{variant.color_name}" added.', 'success')
+    return redirect(url_for('admin.edit_product', product_id=product_id))
+
+
+@admin_bp.route('/products/<int:product_id>/variants/<int:variant_id>', methods=['POST'])
+@admin_required
+def update_variant(product_id, variant_id):
+    variant = ProductVariant.query.filter_by(id=variant_id, product_id=product_id).first_or_404()
+    product = variant.product
+
+    color_name = (request.form.get('color_name') or '').strip()
+    if not color_name:
+        flash('Color name is required.', 'error')
+        return redirect(url_for('admin.edit_product', product_id=product_id))
+
+    sku = (request.form.get('sku') or '').strip() or None
+    if sku and sku != variant.sku:
+        clash = ProductVariant.query.filter(ProductVariant.sku == sku,
+                                            ProductVariant.id != variant.id).first()
+        if clash:
+            flash(f'SKU "{sku}" is already in use.', 'error')
+            return redirect(url_for('admin.edit_product', product_id=product_id))
+
+    variant.color_name = color_name
+    variant.color_hex = (request.form.get('color_hex') or '').strip() or None
+    variant.sku = sku
+    variant.price_override = _parse_decimal(request.form.get('price_override'))
+    variant.cost_price = _parse_decimal(request.form.get('cost_price'))
+    variant.stock_quantity = max(0, _parse_int(request.form.get('stock_quantity'), 0))
+    variant.is_active = request.form.get('is_active') == 'on'
+    variant.sort_order = _parse_int(request.form.get('sort_order'), 0)
+
+    files = request.files.getlist('variant_images')
+    if files:
+        _handle_image_uploads(product, files, variant=variant)
+
+    db.session.commit()
+    flash(f'Color "{variant.color_name}" updated.', 'success')
+    return redirect(url_for('admin.edit_product', product_id=product_id))
+
+
+# ─── Bulk Import / Export (Excel) ────────────────────────────────────────────
+
+@admin_bp.route('/products/import', methods=['GET'])
+@admin_required
+def products_import():
+    return render_template('admin/products_import.html')
+
+
+@admin_bp.route('/products/import/template', methods=['GET'])
+@admin_required
+def products_import_template():
+    from app.services.product_export import build_template_workbook, workbook_to_bytes
+    wb = build_template_workbook()
+    buf = workbook_to_bytes(wb)
+    return send_file(buf,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                     as_attachment=True,
+                     download_name='smart99c-products-template.xlsx')
+
+
+@admin_bp.route('/products/export', methods=['GET'])
+@admin_required
+def products_export():
+    from app.services.product_export import build_catalog_workbook, workbook_to_bytes
+    wb = build_catalog_workbook()
+    buf = workbook_to_bytes(wb)
+    stamp = datetime.utcnow().strftime('%Y%m%d')
+    return send_file(buf,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                     as_attachment=True,
+                     download_name=f'smart99c-products-{stamp}.xlsx')
+
+
+@admin_bp.route('/products/import', methods=['POST'])
+@admin_required
+def products_import_upload():
+    from app.services.product_import import import_workbook
+
+    file = request.files.get('file')
+    if not file or not file.filename:
+        flash('Please choose a file to upload.', 'error')
+        return redirect(url_for('admin.products_import'))
+
+    if not file.filename.lower().endswith('.xlsx'):
+        flash('Only .xlsx files are supported.', 'error')
+        return redirect(url_for('admin.products_import'))
+
+    result = import_workbook(file)
+    return render_template('admin/products_import_result.html', result=result)
+
+
+@admin_bp.route('/products/<int:product_id>/variants/<int:variant_id>/delete', methods=['POST'])
+@admin_required
+def delete_variant(product_id, variant_id):
+    variant = ProductVariant.query.filter_by(id=variant_id, product_id=product_id).first_or_404()
+
+    referenced = OrderItem.query.filter_by(variant_id=variant.id).first() is not None
+    if referenced:
+        variant.is_active = False
+        db.session.commit()
+        flash(f'Color "{variant.color_name}" has existing orders — deactivated instead of deleted.',
+              'warning')
+    else:
+        for img in list(variant.images):
+            if img.cloudinary_public_id:
+                try:
+                    cloudinary.uploader.destroy(img.cloudinary_public_id)
+                except Exception:
+                    pass
+            db.session.delete(img)
+        db.session.delete(variant)
+        db.session.commit()
+        flash('Color deleted.', 'success')
+    return redirect(url_for('admin.edit_product', product_id=product_id))
 
 
 # ─── Categories ──────────────────────────────────────────────────────────────
@@ -372,7 +648,10 @@ def update_order_status(order_id):
     if new_status == 'cancelled' and order.status not in ['cancelled', 'refunded']:
         for item in order.items:
             if item.product and item.product.track_inventory:
-                item.product.stock_quantity += item.quantity
+                if item.variant is not None:
+                    item.variant.stock_quantity += item.quantity
+                else:
+                    item.product.stock_quantity += item.quantity
 
     order.status = new_status
     db.session.commit()

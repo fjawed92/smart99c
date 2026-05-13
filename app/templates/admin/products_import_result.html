@@ -1,0 +1,81 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}Import Result{% endblock %}
+{% block page_title %}Import Result{% endblock %}
+
+{% block content %}
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body">
+    <h6 class="fw-700 mb-3"><i class="bi bi-clipboard-check me-2"></i>Summary</h6>
+    <div class="row g-3">
+      <div class="col-md-2 col-6">
+        <div class="p-3 rounded bg-success-subtle text-center">
+          <div class="fw-700 fs-4">{{ result.created }}</div>
+          <div class="small text-muted">Products created</div>
+        </div>
+      </div>
+      <div class="col-md-2 col-6">
+        <div class="p-3 rounded bg-primary-subtle text-center">
+          <div class="fw-700 fs-4">{{ result.updated }}</div>
+          <div class="small text-muted">Products updated</div>
+        </div>
+      </div>
+      <div class="col-md-2 col-6">
+        <div class="p-3 rounded bg-info-subtle text-center">
+          <div class="fw-700 fs-4">{{ result.variants_created }}</div>
+          <div class="small text-muted">Colors created</div>
+        </div>
+      </div>
+      <div class="col-md-2 col-6">
+        <div class="p-3 rounded bg-info-subtle text-center">
+          <div class="fw-700 fs-4">{{ result.variants_updated }}</div>
+          <div class="small text-muted">Colors updated</div>
+        </div>
+      </div>
+      <div class="col-md-2 col-6">
+        <div class="p-3 rounded bg-warning-subtle text-center">
+          <div class="fw-700 fs-4">{{ result.skipped }}</div>
+          <div class="small text-muted">Rows skipped</div>
+        </div>
+      </div>
+      <div class="col-md-2 col-6">
+        <div class="p-3 rounded bg-danger-subtle text-center">
+          <div class="fw-700 fs-4">{{ result.errors|length }}</div>
+          <div class="small text-muted">Errors</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if result.errors %}
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body">
+    <h6 class="fw-700 mb-3"><i class="bi bi-exclamation-triangle me-2 text-danger"></i>Errors</h6>
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr><th style="width:80px;">Row</th><th>Message</th></tr>
+        </thead>
+        <tbody>
+          {% for row, msg in result.errors %}
+          <tr>
+            <td><code>{{ row }}</code></td>
+            <td class="text-danger">{{ msg }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="d-flex gap-2">
+  <a href="{{ url_for('admin.products_import') }}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-2"></i>Back to Import
+  </a>
+  <a href="{{ url_for('admin.products') }}" class="btn btn-primary">
+    <i class="bi bi-box-seam me-2"></i>View Products
+  </a>
+</div>
+{% endblock %}

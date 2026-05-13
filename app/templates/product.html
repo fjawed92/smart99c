@@ -4,6 +4,25 @@
 {% block meta_description %}{{ product.short_description or product.name }}{% endblock %}
 
 {% block content %}
+{% set active_variants = product.active_variants %}
+{% set has_variants = product.has_variants %}
+{% set default_variant = none %}
+{% if has_variants %}
+  {% for v in active_variants %}
+    {% if default_variant is none and v.stock_quantity > 0 %}
+      {% set default_variant = v %}
+    {% endif %}
+  {% endfor %}
+  {% if default_variant is none %}
+    {% set default_variant = active_variants[0] %}
+  {% endif %}
+{% endif %}
+{% set gallery = product.gallery_images %}
+{% set initial_image_url = (default_variant.image_url if default_variant else product.primary_image_url) %}
+{% set initial_stock = (default_variant.stock_quantity if default_variant else product.stock_quantity) %}
+{% set initial_price = (default_variant.effective_price if default_variant else product.price) %}
+{% set has_initial_stock = (initial_stock > 0) if product.track_inventory else true %}
+
 <div class="page-header-bar">
   <div class="container">
     <nav aria-label="breadcrumb">
@@ -26,20 +45,27 @@
     <div class="col-lg-6">
       <div class="product-gallery">
         <div class="product-main-image mb-3">
-          {% if product.images %}
-          <img src="{{ product.images[0].image_url }}" alt="{{ product.name }}" id="mainProductImage" class="img-fluid rounded-3" />
+          {% if initial_image_url %}
+          <img src="{{ initial_image_url }}" alt="{{ product.name }}" id="mainProductImage" class="img-fluid rounded-3" />
           {% else %}
           <div class="product-img-placeholder-lg rounded-3 d-flex align-items-center justify-content-center">
             <i class="bi bi-image" style="font-size:5rem;color:var(--gray-200);"></i>
           </div>
           {% endif %}
         </div>
-        {% if product.images|length > 1 %}
+        {% if gallery|length > 1 or has_variants %}
         <div class="product-thumbnails d-flex gap-2 flex-wrap">
-          {% for img in product.images %}
-          <div class="product-thumbnail {% if loop.first %}active{% endif %}" data-src="{{ img.image_url }}">
+          {% for img in gallery %}
+          <div class="product-thumbnail {% if loop.first and not default_variant %}active{% endif %}" data-src="{{ img.image_url }}">
             <img src="{{ img.image_url }}" alt="{{ product.name }} {{ loop.index }}" />
           </div>
+          {% endfor %}
+          {% for v in active_variants %}
+            {% for img in v.images %}
+            <div class="product-thumbnail" data-src="{{ img.image_url }}" data-variant-id="{{ v.id }}">
+              <img src="{{ img.image_url }}" alt="{{ v.color_name }}" />
+            </div>
+            {% endfor %}
           {% endfor %}
         </div>
         {% endif %}
@@ -55,12 +81,12 @@
       <h1 class="product-detail-title">{{ product.name }}</h1>
 
       {% if product.sku %}
-      <p class="text-muted small mb-3">SKU: {{ product.sku }}</p>
+      <p class="text-muted small mb-3">SKU: <span id="displaySku">{{ default_variant.sku if default_variant and default_variant.sku else product.sku }}</span></p>
       {% endif %}
 
       <div class="product-detail-pricing mb-4">
-        <span class="price-main">${{ "%.2f"|format(product.price) }}</span>
-        {% if product.is_on_sale %}
+        <span class="price-main" id="displayPrice">${{ "%.2f"|format(initial_price) }}</span>
+        {% if product.is_on_sale and not default_variant %}
         <span class="price-compare">${{ "%.2f"|format(product.compare_price) }}</span>
         <span class="badge bg-danger ms-2">Save {{ product.discount_percent }}%</span>
         {% endif %}
@@ -70,11 +96,40 @@
       <p class="product-short-desc mb-4">{{ product.short_description }}</p>
       {% endif %}
 
+      <!-- Color Swatches -->
+      {% if has_variants %}
+      <div class="variant-swatches mb-4" id="variantSwatches" role="radiogroup" aria-label="Choose color">
+        <p class="variant-label small mb-2">
+          <span class="fw-700">Color:</span>
+          <span id="selectedColorName">{{ default_variant.color_name if default_variant else '' }}</span>
+        </p>
+        <div class="d-flex flex-wrap gap-2">
+          {% for v in active_variants %}
+          <button type="button"
+                  class="swatch {% if v.stock_quantity <= 0 %}out-of-stock{% endif %}{% if default_variant and v.id == default_variant.id %} selected{% endif %}"
+                  role="radio"
+                  aria-checked="{% if default_variant and v.id == default_variant.id %}true{% else %}false{% endif %}"
+                  data-variant-id="{{ v.id }}"
+                  data-stock="{{ v.stock_quantity }}"
+                  data-price="{{ "%.2f"|format(v.effective_price) }}"
+                  data-image="{{ v.image_url or product.primary_image_url or '' }}"
+                  data-color-name="{{ v.color_name }}"
+                  data-sku="{{ v.sku or '' }}"
+                  {% if v.stock_quantity <= 0 %}aria-disabled="true"{% endif %}
+                  title="{{ v.color_name }}{% if v.stock_quantity <= 0 %} — out of stock{% endif %}">
+            <span class="swatch-dot" style="background:{{ v.color_hex or '#cccccc' }};"></span>
+            <span class="swatch-label">{{ v.color_name }}</span>
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
       <!-- Stock Status -->
-      <div class="stock-status mb-4">
-        {% if product.in_stock %}
-          {% if product.track_inventory and product.stock_quantity <= 10 %}
-          <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>Only {{ product.stock_quantity }} left</span>
+      <div class="stock-status mb-4" id="stockStatus">
+        {% if has_initial_stock %}
+          {% if product.track_inventory and initial_stock <= 10 %}
+          <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>Only <span id="stockCount">{{ initial_stock }}</span> left</span>
           {% else %}
           <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>In Stock</span>
           {% endif %}
@@ -84,25 +139,25 @@
       </div>
 
       <!-- Add to Cart -->
-      {% if product.in_stock %}
-      <div class="add-to-cart-section">
+      <div class="add-to-cart-section" id="addToCartSection">
+        <input type="hidden" id="selectedVariantId" value="{{ default_variant.id if default_variant else 0 }}" />
         <div class="d-flex gap-3 align-items-center mb-3">
           <div class="quantity-selector">
             <button class="qty-btn qty-minus" type="button"><i class="bi bi-dash"></i></button>
-            <input type="number" class="qty-input" id="productQty" value="1" min="1" max="{{ product.stock_quantity if product.track_inventory else 99 }}">
+            <input type="number" class="qty-input" id="productQty" value="1" min="1"
+                   max="{{ initial_stock if product.track_inventory else 99 }}"
+                   inputmode="numeric" />
             <button class="qty-btn qty-plus" type="button"><i class="bi bi-plus"></i></button>
           </div>
           <button class="btn btn-primary btn-lg flex-grow-1 add-to-cart-btn"
                   data-product-id="{{ product.id }}"
                   data-qty-input="productQty"
-                  id="addToCartBtn">
-            <i class="bi bi-bag-plus me-2"></i>Add to Cart
+                  id="addToCartBtn"
+                  {% if not has_initial_stock %}disabled{% endif %}>
+            <i class="bi bi-bag-plus me-2"></i><span id="addToCartLabel">{% if has_initial_stock %}Add to Cart{% else %}Out of Stock{% endif %}</span>
           </button>
         </div>
       </div>
-      {% else %}
-      <button class="btn btn-secondary btn-lg w-100" disabled>Out of Stock</button>
-      {% endif %}
 
       <hr class="my-4" />
 
@@ -148,6 +203,24 @@
     </div>
   </div>
 
+  <!-- Sticky mobile add-to-cart -->
+  <div class="mobile-sticky-cart d-lg-none" id="mobileStickyCart" aria-hidden="true">
+    <div class="d-flex align-items-center gap-2">
+      <div class="quantity-selector quantity-selector-sm">
+        <button class="qty-btn mobile-qty-minus" type="button"><i class="bi bi-dash"></i></button>
+        <span class="qty-readout" id="mobileQtyReadout">1</span>
+        <button class="qty-btn mobile-qty-plus" type="button"><i class="bi bi-plus"></i></button>
+      </div>
+      <button class="btn btn-primary flex-grow-1 add-to-cart-btn mobile-add-btn"
+              data-product-id="{{ product.id }}"
+              data-qty-input="productQty"
+              {% if not has_initial_stock %}disabled{% endif %}>
+        <i class="bi bi-bag-plus me-2"></i><span class="mobile-add-label">{% if has_initial_stock %}Add{% else %}Out of Stock{% endif %}</span>
+        <span class="ms-1 fw-700" id="mobileStickyPrice">${{ "%.2f"|format(initial_price) }}</span>
+      </button>
+    </div>
+  </div>
+
   <!-- Related Products -->
   {% if related %}
   <div class="mt-5 pt-4">
@@ -167,23 +240,120 @@
 
 {% block extra_scripts %}
 <script>
-  // Thumbnail switcher
+  // ── Thumbnail switcher ─────────────────────────────────────
   document.querySelectorAll('.product-thumbnail').forEach(thumb => {
     thumb.addEventListener('click', function() {
-      document.getElementById('mainProductImage').src = this.dataset.src;
+      const mainImg = document.getElementById('mainProductImage');
+      if (mainImg) mainImg.src = this.dataset.src;
       document.querySelectorAll('.product-thumbnail').forEach(t => t.classList.remove('active'));
       this.classList.add('active');
     });
   });
 
-  // Qty selector
+  // ── Qty selector ───────────────────────────────────────────
   const qtyInput = document.getElementById('productQty');
-  const max = parseInt(qtyInput?.max) || 99;
+  const mobileQtyReadout = document.getElementById('mobileQtyReadout');
+  function syncMobileQty() {
+    if (mobileQtyReadout && qtyInput) mobileQtyReadout.textContent = qtyInput.value;
+  }
+  function getMax() { return parseInt(qtyInput?.max, 10) || 99; }
   document.querySelector('.qty-minus')?.addEventListener('click', () => {
-    if (parseInt(qtyInput.value) > 1) qtyInput.value = parseInt(qtyInput.value) - 1;
+    if (parseInt(qtyInput.value, 10) > 1) { qtyInput.value = parseInt(qtyInput.value, 10) - 1; syncMobileQty(); }
   });
   document.querySelector('.qty-plus')?.addEventListener('click', () => {
-    if (parseInt(qtyInput.value) < max) qtyInput.value = parseInt(qtyInput.value) + 1;
+    if (parseInt(qtyInput.value, 10) < getMax()) { qtyInput.value = parseInt(qtyInput.value, 10) + 1; syncMobileQty(); }
   });
+  document.querySelector('.mobile-qty-minus')?.addEventListener('click', () => {
+    if (parseInt(qtyInput.value, 10) > 1) { qtyInput.value = parseInt(qtyInput.value, 10) - 1; syncMobileQty(); }
+  });
+  document.querySelector('.mobile-qty-plus')?.addEventListener('click', () => {
+    if (parseInt(qtyInput.value, 10) < getMax()) { qtyInput.value = parseInt(qtyInput.value, 10) + 1; syncMobileQty(); }
+  });
+  qtyInput?.addEventListener('input', syncMobileQty);
+
+  // ── Variant (color swatch) selection ───────────────────────
+  const swatches = document.querySelectorAll('.swatch');
+  const variantInput = document.getElementById('selectedVariantId');
+  const mainImg = document.getElementById('mainProductImage');
+  const priceEl = document.getElementById('displayPrice');
+  const stockStatus = document.getElementById('stockStatus');
+  const colorNameEl = document.getElementById('selectedColorName');
+  const skuEl = document.getElementById('displaySku');
+  const addToCartBtn = document.getElementById('addToCartBtn');
+  const addLabel = document.getElementById('addToCartLabel');
+  const mobileAddBtn = document.querySelector('.mobile-add-btn');
+  const mobileAddLabel = document.querySelector('.mobile-add-label');
+  const mobileStickyPrice = document.getElementById('mobileStickyPrice');
+  const trackInventory = {{ 'true' if product.track_inventory else 'false' }};
+
+  function applyVariant(swatch) {
+    if (!swatch || swatch.classList.contains('out-of-stock')) return;
+    swatches.forEach(s => { s.classList.remove('selected'); s.setAttribute('aria-checked', 'false'); });
+    swatch.classList.add('selected');
+    swatch.setAttribute('aria-checked', 'true');
+
+    const vid = swatch.dataset.variantId;
+    const stock = parseInt(swatch.dataset.stock, 10);
+    const price = parseFloat(swatch.dataset.price);
+    const img = swatch.dataset.image;
+    const colorName = swatch.dataset.colorName;
+    const sku = swatch.dataset.sku;
+
+    variantInput.value = vid;
+    if (mainImg && img) mainImg.src = img;
+    if (priceEl) priceEl.textContent = '$' + price.toFixed(2);
+    if (mobileStickyPrice) mobileStickyPrice.textContent = '$' + price.toFixed(2);
+    if (colorNameEl) colorNameEl.textContent = colorName;
+    if (skuEl && sku) skuEl.textContent = sku;
+
+    if (trackInventory) {
+      qtyInput.max = Math.max(1, stock);
+      if (parseInt(qtyInput.value, 10) > stock) qtyInput.value = Math.max(1, stock);
+      syncMobileQty();
+    }
+
+    const inStock = !trackInventory || stock > 0;
+    if (addToCartBtn) {
+      addToCartBtn.disabled = !inStock;
+      if (addLabel) addLabel.textContent = inStock ? 'Add to Cart' : 'Out of Stock';
+    }
+    if (mobileAddBtn) {
+      mobileAddBtn.disabled = !inStock;
+      if (mobileAddLabel) mobileAddLabel.textContent = inStock ? 'Add' : 'Out of Stock';
+    }
+
+    if (stockStatus) {
+      if (!inStock) {
+        stockStatus.innerHTML = '<span class="badge bg-secondary"><i class="bi bi-x-circle me-1"></i>Out of Stock</span>';
+      } else if (trackInventory && stock <= 10) {
+        stockStatus.innerHTML = '<span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>Only ' + stock + ' left</span>';
+      } else {
+        stockStatus.innerHTML = '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>In Stock</span>';
+      }
+    }
+  }
+
+  swatches.forEach(s => {
+    s.addEventListener('click', () => applyVariant(s));
+    s.addEventListener('keydown', (e) => {
+      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); applyVariant(s); }
+    });
+  });
+
+  // ── Mobile sticky add-to-cart bar visibility ───────────────
+  const stickyBar = document.getElementById('mobileStickyCart');
+  const mainAddSection = document.getElementById('addToCartSection');
+  if (stickyBar && mainAddSection && 'IntersectionObserver' in window) {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          stickyBar.classList.remove('visible');
+        } else {
+          stickyBar.classList.add('visible');
+        }
+      });
+    }, { threshold: 0 });
+    observer.observe(mainAddSection);
+  }
 </script>
 {% endblock %}

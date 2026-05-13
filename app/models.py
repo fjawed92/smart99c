@@ -84,12 +84,20 @@ class Product(db.Model):
     category = db.relationship('Category', back_populates='products')
     images = db.relationship('ProductImage', back_populates='product',
                              cascade='all, delete-orphan', order_by='ProductImage.sort_order')
+    variants = db.relationship('ProductVariant', back_populates='product',
+                               cascade='all, delete-orphan',
+                               order_by='ProductVariant.sort_order, ProductVariant.id')
     order_items = db.relationship('OrderItem', back_populates='product')
 
     @property
     def primary_image(self):
-        primary = next((img for img in self.images if img.is_primary), None)
-        return primary or (self.images[0] if self.images else None)
+        gallery = [img for img in self.images if img.variant_id is None]
+        primary = next((img for img in gallery if img.is_primary), None)
+        if primary:
+            return primary
+        if gallery:
+            return gallery[0]
+        return self.images[0] if self.images else None
 
     @property
     def primary_image_url(self):
@@ -97,13 +105,33 @@ class Product(db.Model):
         return img.image_url if img else None
 
     @property
+    def gallery_images(self):
+        return [img for img in self.images if img.variant_id is None]
+
+    @property
     def is_on_sale(self):
         return bool(self.compare_price and self.compare_price > self.price)
+
+    @property
+    def active_variants(self):
+        return [v for v in self.variants if v.is_active]
+
+    @property
+    def has_variants(self):
+        return any(v.is_active for v in self.variants)
+
+    @property
+    def total_stock(self):
+        if self.has_variants:
+            return sum(v.stock_quantity for v in self.variants if v.is_active)
+        return self.stock_quantity
 
     @property
     def in_stock(self):
         if not self.track_inventory:
             return True
+        if self.has_variants:
+            return any(v.stock_quantity > 0 for v in self.variants if v.is_active)
         return self.stock_quantity > 0
 
     @property
@@ -116,20 +144,63 @@ class Product(db.Model):
         return f'<Product {self.name}>'
 
 
+class ProductVariant(db.Model):
+    __tablename__ = 'product_variants'
+
+    id = db.Column(db.Integer, primary_key=True)
+    product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False, index=True)
+    color_name = db.Column(db.String(60), nullable=False)
+    color_hex = db.Column(db.String(7))
+    sku = db.Column(db.String(100), unique=True)
+    price_override = db.Column(db.Numeric(10, 2))
+    cost_price = db.Column(db.Numeric(10, 2))
+    stock_quantity = db.Column(db.Integer, default=0, nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    sort_order = db.Column(db.Integer, default=0, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    product = db.relationship('Product', back_populates='variants')
+    images = db.relationship('ProductImage', back_populates='variant',
+                             foreign_keys='ProductImage.variant_id',
+                             order_by='ProductImage.sort_order')
+
+    @property
+    def effective_price(self):
+        return self.price_override if self.price_override is not None else self.product.price
+
+    @property
+    def image_url(self):
+        if self.images:
+            return self.images[0].image_url
+        return self.product.primary_image_url
+
+    @property
+    def in_stock(self):
+        return self.is_active and self.stock_quantity > 0
+
+    def __repr__(self):
+        return f'<ProductVariant {self.product_id} {self.color_name}>'
+
+
 class ProductImage(db.Model):
     __tablename__ = 'product_images'
 
     id = db.Column(db.Integer, primary_key=True)
     product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False)
+    variant_id = db.Column(db.Integer,
+                           db.ForeignKey('product_variants.id', ondelete='SET NULL'),
+                           nullable=True, index=True)
     image_url = db.Column(db.String(500), nullable=False)
     cloudinary_public_id = db.Column(db.String(255))
     is_primary = db.Column(db.Boolean, default=False)
     sort_order = db.Column(db.Integer, default=0)
 
     product = db.relationship('Product', back_populates='images')
+    variant = db.relationship('ProductVariant', back_populates='images', foreign_keys=[variant_id])
 
     def __repr__(self):
-        return f'<ProductImage {self.product_id} primary={self.is_primary}>'
+        return f'<ProductImage {self.product_id} variant={self.variant_id} primary={self.is_primary}>'
 
 
 class Order(db.Model):
@@ -166,14 +237,25 @@ class OrderItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     order_id = db.Column(db.Integer, db.ForeignKey('orders.id'), nullable=False)
     product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=True)
+    variant_id = db.Column(db.Integer,
+                           db.ForeignKey('product_variants.id', ondelete='SET NULL'),
+                           nullable=True)
     product_name = db.Column(db.String(255), nullable=False)
     product_sku = db.Column(db.String(100))
+    product_color = db.Column(db.String(60))
     quantity = db.Column(db.Integer, nullable=False)
     unit_price = db.Column(db.Numeric(10, 2), nullable=False)
     total_price = db.Column(db.Numeric(10, 2), nullable=False)
 
     order = db.relationship('Order', back_populates='items')
     product = db.relationship('Product', back_populates='order_items')
+    variant = db.relationship('ProductVariant', foreign_keys=[variant_id])
+
+    @property
+    def display_name(self):
+        if self.product_color:
+            return f'{self.product_name} — {self.product_color}'
+        return self.product_name
 
     def __repr__(self):
         return f'<OrderItem {self.product_name} x{self.quantity}>'

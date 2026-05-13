@@ -155,20 +155,27 @@ def confirm_order():
 
     for item in items:
         product = item['product']
+        variant = item.get('variant')
         qty = item['quantity']
+        unit_price = item['unit_price']
         order_item = OrderItem(
             order_id=order.id,
             product_id=product.id,
+            variant_id=variant.id if variant else None,
             product_name=product.name,
-            product_sku=product.sku or '',
+            product_sku=(variant.sku if variant and variant.sku else product.sku) or '',
+            product_color=variant.color_name if variant else None,
             quantity=qty,
-            unit_price=product.price,
-            total_price=product.price * qty,
+            unit_price=unit_price,
+            total_price=unit_price * qty,
         )
         db.session.add(order_item)
 
         if product.track_inventory:
-            product.stock_quantity = max(0, product.stock_quantity - qty)
+            if variant is not None:
+                variant.stock_quantity = max(0, variant.stock_quantity - qty)
+            else:
+                product.stock_quantity = max(0, product.stock_quantity - qty)
 
     db.session.commit()
 

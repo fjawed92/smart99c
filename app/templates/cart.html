@@ -26,12 +26,15 @@
             </thead>
             <tbody>
               {% for item in items %}
-              <tr id="cartRow{{ item.product.id }}">
+              {% set key_attr = item.line_key|replace(':', '_') %}
+              {% set max_qty = (item.variant.stock_quantity if item.variant else item.product.stock_quantity) if item.product.track_inventory else 99 %}
+              {% set thumb = (item.variant.image_url if item.variant else item.product.primary_image_url) %}
+              <tr id="cartRow_{{ key_attr }}">
                 <td>
                   <div class="d-flex align-items-center gap-3">
                     <a href="{{ url_for('shop.product_detail', slug=item.product.slug) }}">
-                      {% if item.product.primary_image_url %}
-                      <img src="{{ item.product.primary_image_url }}" alt="{{ item.product.name }}"
+                      {% if thumb %}
+                      <img src="{{ thumb }}" alt="{{ item.product.name }}"
                            class="cart-item-thumb" />
                       {% else %}
                       <div class="cart-item-thumb-placeholder"><i class="bi bi-image"></i></div>
@@ -40,27 +43,33 @@
                     <div>
                       <a href="{{ url_for('shop.product_detail', slug=item.product.slug) }}"
                          class="fw-600 text-dark text-decoration-none">{{ item.product.name }}</a>
-                      <p class="text-muted small mb-0">${{ "%.2f"|format(item.product.price) }} each</p>
+                      {% if item.variant %}
+                      <div class="cart-item-color small mt-1">
+                        <span class="swatch-dot-inline" style="background:{{ item.variant.color_hex or '#ccc' }};"></span>
+                        {{ item.variant.color_name }}
+                      </div>
+                      {% endif %}
+                      <p class="text-muted small mb-0">${{ "%.2f"|format(item.unit_price) }} each</p>
                     </div>
                   </div>
                 </td>
                 <td class="text-center align-middle">
                   <div class="quantity-selector quantity-selector-sm mx-auto">
                     <button class="qty-btn qty-minus" type="button"
-                            data-product-id="{{ item.product.id }}"><i class="bi bi-dash"></i></button>
+                            data-line-key="{{ item.line_key }}"><i class="bi bi-dash"></i></button>
                     <input type="number" class="qty-input cart-qty-input" value="{{ item.quantity }}"
-                           min="1" max="{{ item.product.stock_quantity if item.product.track_inventory else 99 }}"
-                           data-product-id="{{ item.product.id }}" />
+                           min="1" max="{{ max_qty }}"
+                           data-line-key="{{ item.line_key }}" />
                     <button class="qty-btn qty-plus" type="button"
-                            data-product-id="{{ item.product.id }}"><i class="bi bi-plus"></i></button>
+                            data-line-key="{{ item.line_key }}"><i class="bi bi-plus"></i></button>
                   </div>
                 </td>
-                <td class="text-end align-middle fw-600" id="itemTotal{{ item.product.id }}">
+                <td class="text-end align-middle fw-600" id="itemTotal_{{ key_attr }}">
                   ${{ "%.2f"|format(item.total) }}
                 </td>
                 <td class="text-end align-middle">
                   <button class="btn btn-sm btn-link text-danger remove-from-cart-btn p-0"
-                          data-product-id="{{ item.product.id }}" title="Remove">
+                          data-line-key="{{ item.line_key }}" title="Remove">
                     <i class="bi bi-x-lg"></i>
                   </button>
                 </td>

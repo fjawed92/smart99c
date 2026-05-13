@@ -3,6 +3,12 @@
 {% block page_title %}Orders{% endblock %}
 
 {% block content %}
+<div class="d-flex justify-content-end mb-3">
+  <a href="{{ url_for('admin.orders_export') }}" class="btn btn-outline-primary">
+    <i class="bi bi-file-earmark-spreadsheet me-2"></i>Export to Excel
+  </a>
+</div>
+
 <!-- Filters -->
 <div class="card border-0 shadow-sm mb-4">
   <div class="card-body">

@@ -64,8 +64,11 @@
       </a>
 
       <div class="sidebar-section">Store</div>
-      <a href="{{ url_for('admin.products') }}" class="sidebar-link {% if 'product' in request.endpoint %}active{% endif %}">
+      <a href="{{ url_for('admin.products') }}" class="sidebar-link {% if 'product' in request.endpoint and 'import' not in request.endpoint %}active{% endif %}">
         <i class="bi bi-box-seam"></i> Products
+      </a>
+      <a href="{{ url_for('admin.products_import') }}" class="sidebar-link {% if 'products_import' in request.endpoint or 'products_export' in request.endpoint %}active{% endif %}" style="padding-left:2.25rem;font-size:.85rem;">
+        <i class="bi bi-file-earmark-spreadsheet"></i> Bulk Import
       </a>
       <a href="{{ url_for('admin.categories') }}" class="sidebar-link {% if 'categor' in request.endpoint %}active{% endif %}">
         <i class="bi bi-grid"></i> Categories
