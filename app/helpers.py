@@ -1,5 +1,8 @@
+import base64
+import hashlib
 from decimal import Decimal
-from flask import session
+from flask import session, current_app
+from app.extensions import db
 
 
 def _parse_line_key(key):
@@ -113,3 +116,36 @@ def generate_order_number():
     last = Order.query.order_by(Order.id.desc()).first()
     next_id = (last.id + 1) if last else 1
     return f'S99-{next_id:05d}'
+
+
+def _fernet():
+    """Build a Fernet from SECRET_KEY so encrypted SiteSettings values stay
+    portable across deploys that share the same SECRET_KEY."""
+    from cryptography.fernet import Fernet
+    secret = (current_app.config.get('SECRET_KEY') or 'dev-secret-key').encode('utf-8')
+    key = base64.urlsafe_b64encode(hashlib.sha256(secret).digest())
+    return Fernet(key)
+
+
+def encrypt_secret(plaintext):
+    if not plaintext:
+        return ''
+    return _fernet().encrypt(plaintext.encode('utf-8')).decode('ascii')
+
+
+def decrypt_secret(token):
+    if not token:
+        return ''
+    try:
+        return _fernet().decrypt(token.encode('ascii')).decode('utf-8')
+    except Exception:
+        return ''
+
+
+def set_site_setting(key, value):
+    from app.models import SiteSettings
+    setting = SiteSettings.query.filter_by(key=key).first()
+    if setting:
+        setting.value = value
+    else:
+        db.session.add(SiteSettings(key=key, value=value))

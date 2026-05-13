@@ -76,6 +76,12 @@ def upgrade():
         else:
             print('order_items.product_color already present — skipping.')
 
+        # 5. payment_links table — created by db.create_all() above when missing.
+        if 'payment_links' in inspector.get_table_names():
+            print('payment_links table already present — OK.')
+        else:
+            print('payment_links table is missing — re-run after deploy.')
+
         print('Done.')
 
 

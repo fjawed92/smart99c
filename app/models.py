@@ -319,3 +319,39 @@ class SiteSettings(db.Model):
 
     def __repr__(self):
         return f'<SiteSettings {self.key}>'
+
+
+class PaymentLink(db.Model):
+    __tablename__ = 'payment_links'
+
+    STATUS_CHOICES = ['active', 'paid', 'void']
+
+    id = db.Column(db.Integer, primary_key=True)
+    description = db.Column(db.String(255), nullable=False)
+    amount = db.Column(db.Numeric(10, 2), nullable=False)
+    quantity = db.Column(db.Integer, default=1, nullable=False)
+    customer_email = db.Column(db.String(255))
+    customer_name = db.Column(db.String(255))
+
+    product_id = db.Column(db.Integer, db.ForeignKey('products.id', ondelete='SET NULL'), nullable=True)
+    variant_id = db.Column(db.Integer, db.ForeignKey('product_variants.id', ondelete='SET NULL'), nullable=True)
+    deduct_stock_on_paid = db.Column(db.Boolean, default=False, nullable=False)
+
+    stripe_product_id = db.Column(db.String(255))
+    stripe_price_id = db.Column(db.String(255))
+    stripe_payment_link_id = db.Column(db.String(255), index=True)
+    stripe_checkout_session_id = db.Column(db.String(255))
+    url = db.Column(db.String(500))
+
+    status = db.Column(db.String(20), default='active', nullable=False)
+    email_sent_at = db.Column(db.DateTime)
+    paid_at = db.Column(db.DateTime)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    product = db.relationship('Product', foreign_keys=[product_id])
+    variant = db.relationship('ProductVariant', foreign_keys=[variant_id])
+    created_by = db.relationship('User', foreign_keys=[created_by_id])
+
+    def __repr__(self):
+        return f'<PaymentLink {self.description} ${self.amount}>'

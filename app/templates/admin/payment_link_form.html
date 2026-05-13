@@ -1,0 +1,137 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}Create Payment Link{% endblock %}
+{% block page_title %}Create Payment Link{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <form method="POST" action="{{ url_for('admin.new_payment_link') }}">
+      {{ form.hidden_tag() }}
+
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 pt-3">
+          <h6 class="fw-700 mb-0">Charge details</h6>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-8">
+              <label class="form-label">Description (shown to customer at checkout)</label>
+              {{ form.description(class="form-control", placeholder="e.g. Custom Order for John") }}
+              {% if form.description.errors %}<div class="text-danger small">{{ form.description.errors[0] }}</div>{% endif %}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Amount (USD)</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                {{ form.amount(class="form-control", step="0.01", placeholder="9.99") }}
+              </div>
+              {% if form.amount.errors %}<div class="text-danger small">{{ form.amount.errors[0] }}</div>{% endif %}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Quantity</label>
+              {{ form.quantity(class="form-control", min=1) }}
+              <small class="text-muted">Total charged = amount × quantity.</small>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 pt-3">
+          <h6 class="fw-700 mb-0">Customer (optional)</h6>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Customer Name</label>
+              {{ form.customer_name(class="form-control", placeholder="Jane Doe") }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Customer Email</label>
+              {{ form.customer_email(class="form-control", placeholder="jane@example.com") }}
+              {% if form.customer_email.errors %}<div class="text-danger small">{{ form.customer_email.errors[0] }}</div>{% endif %}
+            </div>
+            <div class="col-12">
+              <div class="form-check">
+                {{ form.send_email(class="form-check-input", id="send_email") }}
+                <label for="send_email" class="form-check-label">
+                  Email the payment link to the customer right after creating it
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 pt-3">
+          <h6 class="fw-700 mb-0">Attach Product (optional)</h6>
+          <small class="text-muted">Only used for record-keeping and (optionally) stock deduction. The price stays whatever you set above.</small>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Product</label>
+              {{ form.product_id(class="form-select", id="product_select") }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Variant / Color</label>
+              {{ form.variant_id(class="form-select", id="variant_select") }}
+            </div>
+            <div class="col-12">
+              <div class="form-check">
+                {{ form.deduct_stock_on_paid(class="form-check-input", id="deduct_stock") }}
+                <label for="deduct_stock" class="form-check-label">
+                  Deduct stock when this link is paid
+                </label>
+              </div>
+              <small class="text-muted">Requires a product to be attached. If a variant is selected, the variant's stock is reduced; otherwise the product's stock is reduced.</small>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-between">
+        <a href="{{ url_for('admin.payment_links') }}" class="btn btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary btn-lg">
+          <i class="bi bi-link-45deg me-1"></i>Create Payment Link
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  const productSelect = document.getElementById('product_select');
+  const variantSelect = document.getElementById('variant_select');
+  const deductCheckbox = document.getElementById('deduct_stock');
+
+  function refreshDeductState() {
+    const hasProduct = parseInt(productSelect.value, 10) > 0;
+    deductCheckbox.disabled = !hasProduct;
+    if (!hasProduct) { deductCheckbox.checked = false; }
+  }
+
+  async function loadVariants() {
+    const pid = parseInt(productSelect.value, 10) || 0;
+    variantSelect.innerHTML = '<option value="0">— No variant —</option>';
+    if (!pid) { refreshDeductState(); return; }
+    try {
+      const r = await fetch(`{{ url_for('admin.payment_link_variants', product_id=0) }}`.replace('/0', '/' + pid));
+      const data = await r.json();
+      (data.variants || []).forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v.id;
+        opt.textContent = `${v.name} (stock ${v.stock})`;
+        variantSelect.appendChild(opt);
+      });
+    } catch (e) { /* ignore */ }
+    refreshDeductState();
+  }
+
+  productSelect.addEventListener('change', loadVariants);
+  refreshDeductState();
+</script>
+{% endblock %}
