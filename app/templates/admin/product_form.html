@@ -96,12 +96,12 @@
       </div>
 
       <!-- Images -->
-      <div class="card border-0 shadow-sm">
+      <div class="card border-0 shadow-sm mb-4">
         <div class="card-body">
           <h6 class="fw-700 mb-3">Product Images</h6>
-          {% if product and product.images %}
+          {% if product and product.gallery_images %}
           <div class="row g-2 mb-3">
-            {% for img in product.images %}
+            {% for img in product.gallery_images %}
             <div class="col-3">
               <div class="position-relative">
                 <img src="{{ img.image_url }}" alt="Product image" class="img-fluid rounded" style="height:100px;object-fit:cover;width:100%;" />
@@ -163,6 +163,145 @@
     </div>
   </div>
 </form>
+
+{% if product %}
+<div class="card border-0 shadow-sm mt-4">
+  <div class="card-body">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h6 class="fw-700 mb-0"><i class="bi bi-palette me-2"></i>Colors / Variants</h6>
+      <small class="text-muted">When a product has colors, customers pick one before adding to cart. Stock is tracked per color.</small>
+    </div>
+
+    {% if product.variants %}
+    <div class="table-responsive mb-3">
+      <table class="table align-middle variants-table">
+        <thead>
+          <tr>
+            <th>Color</th>
+            <th>Hex</th>
+            <th>SKU</th>
+            <th>Price Override</th>
+            <th>Cost</th>
+            <th>Stock</th>
+            <th>Image</th>
+            <th>Active</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for v in product.variants %}
+          <tr>
+            <td colspan="9" class="p-0">
+              <form method="POST" action="{{ url_for('admin.update_variant', product_id=product.id, variant_id=v.id) }}"
+                    enctype="multipart/form-data" class="variant-row-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <div class="row g-2 align-items-center p-2">
+                  <div class="col-md-2">
+                    <input type="text" name="color_name" value="{{ v.color_name }}" class="form-control form-control-sm" required />
+                  </div>
+                  <div class="col-md-1">
+                    <input type="color" name="color_hex" value="{{ v.color_hex or '#cccccc' }}" class="form-control form-control-color form-control-sm" />
+                  </div>
+                  <div class="col-md-1">
+                    <input type="text" name="sku" value="{{ v.sku or '' }}" placeholder="SKU" class="form-control form-control-sm" />
+                  </div>
+                  <div class="col-md-1">
+                    <input type="number" step="0.01" name="price_override" value="{{ v.price_override or '' }}" placeholder="—" class="form-control form-control-sm" inputmode="decimal" />
+                  </div>
+                  <div class="col-md-1">
+                    <input type="number" step="0.01" name="cost_price" value="{{ v.cost_price or '' }}" placeholder="—" class="form-control form-control-sm" inputmode="decimal" />
+                  </div>
+                  <div class="col-md-1">
+                    <input type="number" name="stock_quantity" value="{{ v.stock_quantity }}" min="0" class="form-control form-control-sm" inputmode="numeric" />
+                  </div>
+                  <div class="col-md-2">
+                    {% if v.images %}
+                    <img src="{{ v.images[0].image_url }}" alt="{{ v.color_name }}" class="rounded me-1" style="height:32px;width:32px;object-fit:cover;" />
+                    {% endif %}
+                    <input type="file" name="variant_images" accept="image/*" class="form-control form-control-sm d-inline-block" style="width:auto;" />
+                  </div>
+                  <div class="col-md-1 text-center">
+                    <div class="form-check form-switch d-inline-block">
+                      <input class="form-check-input" type="checkbox" name="is_active" {% if v.is_active %}checked{% endif %} />
+                    </div>
+                  </div>
+                  <div class="col-md-2 text-end d-flex gap-2 justify-content-end">
+                    <input type="hidden" name="sort_order" value="{{ v.sort_order }}" />
+                    <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                  </div>
+                </div>
+              </form>
+              <form method="POST" action="{{ url_for('admin.delete_variant', product_id=product.id, variant_id=v.id) }}"
+                    onsubmit="return confirm('Delete color {{ v.color_name }}? Variants linked to existing orders are deactivated rather than deleted.');"
+                    class="text-end px-2 pb-2 mt-n2">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <button type="submit" class="btn btn-sm btn-link text-danger p-0">
+                  <i class="bi bi-trash"></i> Delete
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted small mb-3">No colors yet. Add one below to enable color selection on this product's page.</p>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('admin.create_variant', product_id=product.id) }}"
+          enctype="multipart/form-data" class="border rounded p-3 bg-light-subtle">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <h6 class="small fw-700 mb-2"><i class="bi bi-plus-circle me-1"></i>Add Color</h6>
+      <div class="row g-2 align-items-end">
+        <div class="col-md-2">
+          <label class="form-label small">Color Name *</label>
+          <input type="text" name="color_name" class="form-control form-control-sm" required placeholder="e.g. Red" />
+        </div>
+        <div class="col-md-1">
+          <label class="form-label small">Hex</label>
+          <input type="color" name="color_hex" value="#ff0000" class="form-control form-control-color form-control-sm" />
+        </div>
+        <div class="col-md-1">
+          <label class="form-label small">SKU</label>
+          <input type="text" name="sku" class="form-control form-control-sm" />
+        </div>
+        <div class="col-md-1">
+          <label class="form-label small">Price</label>
+          <input type="number" step="0.01" name="price_override" placeholder="(default)" class="form-control form-control-sm" inputmode="decimal" />
+        </div>
+        <div class="col-md-1">
+          <label class="form-label small">Cost</label>
+          <input type="number" step="0.01" name="cost_price" placeholder="(opt)" class="form-control form-control-sm" inputmode="decimal" />
+        </div>
+        <div class="col-md-1">
+          <label class="form-label small">Stock</label>
+          <input type="number" name="stock_quantity" value="0" min="0" class="form-control form-control-sm" inputmode="numeric" />
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Image</label>
+          <input type="file" name="variant_images" accept="image/*" class="form-control form-control-sm" />
+        </div>
+        <div class="col-md-1 text-center">
+          <label class="form-label small d-block">Active</label>
+          <div class="form-check form-switch d-inline-block">
+            <input class="form-check-input" type="checkbox" name="is_active" checked />
+          </div>
+        </div>
+        <div class="col-md-2 text-end">
+          <button type="submit" class="btn btn-sm btn-success w-100">
+            <i class="bi bi-plus-lg"></i> Add Color
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% else %}
+<div class="alert alert-info mt-4 small">
+  <i class="bi bi-info-circle me-2"></i>Save this product first, then you'll be able to add color variants.
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_scripts %}

@@ -1,0 +1,57 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}Bulk Import — Products{% endblock %}
+{% block page_title %}Bulk Import / Export{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-body">
+        <h6 class="fw-700 mb-3"><i class="bi bi-upload me-2"></i>Import Products from Excel</h6>
+        <p class="text-muted small">
+          Upload an .xlsx file matching the template. Each row is either a product or a color variant.
+          Existing products are updated by <code>product_slug</code> (or <code>product_name</code>);
+          new products are created when not found. Blank cells leave existing values unchanged.
+        </p>
+        <form method="POST" enctype="multipart/form-data" action="{{ url_for('admin.products_import_upload') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <div class="mb-3">
+            <label class="form-label fw-700">Choose file (.xlsx)</label>
+            <input type="file" name="file" accept=".xlsx" class="form-control" required />
+          </div>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-cloud-arrow-up me-2"></i>Upload & Process
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-body">
+        <h6 class="fw-700 mb-3"><i class="bi bi-download me-2"></i>Templates & Export</h6>
+        <div class="d-grid gap-2">
+          <a href="{{ url_for('admin.products_import_template') }}" class="btn btn-outline-primary">
+            <i class="bi bi-file-earmark-spreadsheet me-2"></i>Download Blank Template
+          </a>
+          <a href="{{ url_for('admin.products_export') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-cloud-arrow-down me-2"></i>Download Current Catalog
+          </a>
+        </div>
+        <hr />
+        <h6 class="small fw-700 text-muted mb-2">Column reference</h6>
+        <ul class="small text-muted mb-0 ps-3" style="line-height:1.7;">
+          <li><strong>product_slug</strong>: lookup key (auto-generated if empty for new products)</li>
+          <li><strong>product_name</strong>: required for new products</li>
+          <li><strong>price</strong>: required for new products; blank leaves unchanged on update</li>
+          <li><strong>color_name</strong>: if present, the row defines a variant on the product</li>
+          <li><strong>variant_sku</strong>: lookup key for existing variants on the product</li>
+          <li><strong>stock_quantity</strong>: used when there's no color; otherwise use <strong>variant_stock_quantity</strong></li>
+          <li>Booleans: TRUE/FALSE, 1/0, yes/no all accepted</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

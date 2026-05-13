@@ -26,9 +26,27 @@
       <span class="product-compare-price">${{ "%.2f"|format(product.compare_price) }}</span>
       {% endif %}
     </div>
+    {% if product.has_variants %}
+    <div class="product-card-swatches" aria-label="Available colors">
+      {% for v in product.active_variants[:5] %}
+      <span class="card-swatch {% if not v.in_stock %}out-of-stock{% endif %}"
+            title="{{ v.color_name }}{% if not v.in_stock %} (out of stock){% endif %}"
+            style="background:{{ v.color_hex or '#ccc' }};"></span>
+      {% endfor %}
+      {% if product.active_variants|length > 5 %}
+      <span class="card-swatch-more">+{{ product.active_variants|length - 5 }}</span>
+      {% endif %}
+    </div>
+    {% endif %}
     {% if not product.in_stock %}
     <p class="text-muted small mb-2">Out of Stock</p>
     {% endif %}
+    {% if product.has_variants %}
+    <a href="{{ url_for('shop.product_detail', slug=product.slug) }}"
+       class="btn btn-add-to-cart w-100 mt-2{% if not product.in_stock %} disabled{% endif %}">
+      <i class="bi bi-eye me-1"></i> Choose Color
+    </a>
+    {% else %}
     <button
       class="btn btn-add-to-cart add-to-cart-btn w-100 mt-2"
       data-product-id="{{ product.id }}"
@@ -39,5 +57,6 @@
       Out of Stock
       {% endif %}
     </button>
+    {% endif %}
   </div>
 </div>
