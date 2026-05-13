@@ -11,8 +11,9 @@ from wtforms import (StringField, TextAreaField, DecimalField, IntegerField,
                      BooleanField, SelectField, FileField, PasswordField, validators)
 from app.extensions import db
 from app.models import (Product, ProductImage, ProductVariant, Category, Order,
-                        OrderItem, User, ShippingRate, SiteSettings)
-from app.helpers import generate_slug
+                        OrderItem, User, ShippingRate, SiteSettings, PaymentLink)
+from app.helpers import (generate_slug, get_site_setting, set_site_setting,
+                         encrypt_secret)
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -894,3 +895,268 @@ def settings():
 
     settings_dict = {s.key: s.value for s in SiteSettings.query.all()}
     return render_template('admin/settings.html', settings=settings_dict)
+
+
+# ─── Email / SMTP Settings ───────────────────────────────────────────────────
+
+@admin_bp.route('/email-settings', methods=['GET', 'POST'])
+@admin_required
+def email_settings():
+    from app.services.mailer import send_email, is_mail_configured
+
+    if request.method == 'POST':
+        action = request.form.get('action', 'save')
+
+        mail_server = (request.form.get('mail_server') or '').strip() or 'smtp.gmail.com'
+        mail_port = (request.form.get('mail_port') or '').strip() or '587'
+        mail_use_tls = '1' if request.form.get('mail_use_tls') == 'on' else '0'
+        mail_username = (request.form.get('mail_username') or '').strip()
+        mail_from_name = (request.form.get('mail_from_name') or '').strip()
+        mail_from_email = (request.form.get('mail_from_email') or '').strip() or mail_username
+        new_password = request.form.get('mail_password') or ''
+
+        set_site_setting('mail_server', mail_server)
+        set_site_setting('mail_port', mail_port)
+        set_site_setting('mail_use_tls', mail_use_tls)
+        set_site_setting('mail_username', mail_username)
+        set_site_setting('mail_from_name', mail_from_name)
+        set_site_setting('mail_from_email', mail_from_email)
+        if new_password:
+            set_site_setting('mail_password_encrypted', encrypt_secret(new_password))
+        db.session.commit()
+
+        if action == 'test':
+            test_to = (request.form.get('test_email') or '').strip() or mail_from_email
+            if not test_to:
+                flash('Enter a recipient address to send a test email.', 'error')
+                return redirect(url_for('admin.email_settings'))
+            try:
+                send_email(
+                    test_to,
+                    'Smart 99¢ Plus — Test Email',
+                    '<p>This is a test email from your Smart 99¢ Plus admin panel.</p>'
+                    f'<p>If you received this, your SMTP settings are working.</p>'
+                    f'<p style="color:#888;font-size:0.85em;">Sent to {test_to}.</p>',
+                    text_body=f'Test email from Smart 99¢ Plus admin panel. Sent to {test_to}.',
+                )
+                flash(f'Test email sent to {test_to}.', 'success')
+            except Exception as e:
+                flash(f'Test email failed: {e}', 'error')
+        else:
+            flash('Email settings saved.', 'success')
+        return redirect(url_for('admin.email_settings'))
+
+    password_is_set = bool(get_site_setting('mail_password_encrypted'))
+    settings_dict = {
+        'mail_server': get_site_setting('mail_server') or current_app.config.get('MAIL_SERVER', 'smtp.gmail.com'),
+        'mail_port': get_site_setting('mail_port') or str(current_app.config.get('MAIL_PORT', 587)),
+        'mail_use_tls': get_site_setting('mail_use_tls', '1'),
+        'mail_username': get_site_setting('mail_username') or current_app.config.get('MAIL_USERNAME', ''),
+        'mail_from_name': get_site_setting('mail_from_name', ''),
+        'mail_from_email': get_site_setting('mail_from_email') or current_app.config.get('MAIL_USERNAME', ''),
+    }
+    return render_template('admin/email_settings.html',
+                           settings=settings_dict,
+                           password_is_set=password_is_set,
+                           is_configured=is_mail_configured())
+
+
+# ─── Payment Links ───────────────────────────────────────────────────────────
+
+class PaymentLinkForm(FlaskForm):
+    description = StringField('Description', [validators.DataRequired(), validators.Length(max=255)])
+    amount = DecimalField('Amount (USD)', [validators.DataRequired(), validators.NumberRange(min=0.5)], places=2)
+    quantity = IntegerField('Quantity', [validators.Optional(), validators.NumberRange(min=1)], default=1)
+    customer_name = StringField('Customer Name (optional)', [validators.Optional(), validators.Length(max=255)])
+    customer_email = StringField('Customer Email (optional)', [validators.Optional(), validators.Email(), validators.Length(max=255)])
+    product_id = SelectField('Attach Product (optional)', coerce=int, default=0)
+    variant_id = SelectField('Variant / Color (optional)', coerce=int, default=0)
+    deduct_stock_on_paid = BooleanField('Deduct stock when paid', default=False)
+    send_email = BooleanField('Email payment link to customer on create', default=False)
+
+
+def _product_choices():
+    products = Product.query.filter_by(is_active=True).order_by(Product.name).all()
+    return [(0, '— No product —')] + [(p.id, f'{p.name} (${p.price})') for p in products]
+
+
+def _variant_choices(product_id=None):
+    choices = [(0, '— No variant —')]
+    if product_id:
+        variants = ProductVariant.query.filter_by(product_id=product_id, is_active=True)\
+            .order_by(ProductVariant.sort_order, ProductVariant.id).all()
+        choices += [(v.id, v.color_name) for v in variants]
+    return choices
+
+
+@admin_bp.route('/payment-links')
+@admin_required
+def payment_links():
+    page = request.args.get('page', 1, type=int)
+    status = request.args.get('status', '')
+    query = PaymentLink.query
+    if status:
+        query = query.filter_by(status=status)
+    pagination = query.order_by(PaymentLink.created_at.desc()).paginate(page=page, per_page=25)
+    return render_template('admin/payment_links.html',
+                           pagination=pagination,
+                           links=pagination.items,
+                           status=status)
+
+
+@admin_bp.route('/payment-links/new', methods=['GET', 'POST'])
+@admin_required
+def new_payment_link():
+    import stripe
+
+    form = PaymentLinkForm()
+    form.product_id.choices = _product_choices()
+    # Variant choices depend on selected product. Populate based on submitted value
+    # for POST validation; otherwise leave empty.
+    selected_product_id = request.form.get('product_id', type=int) or request.args.get('product_id', type=int) or 0
+    form.variant_id.choices = _variant_choices(selected_product_id)
+
+    if form.validate_on_submit():
+        if not current_app.config.get('STRIPE_SECRET_KEY'):
+            flash('Stripe secret key is not configured. Set STRIPE_SECRET_KEY in your environment.', 'error')
+            return render_template('admin/payment_link_form.html', form=form, link=None)
+
+        product_id = form.product_id.data or None
+        variant_id = form.variant_id.data or None
+        if variant_id:
+            variant = ProductVariant.query.get(variant_id)
+            if not variant or variant.product_id != product_id:
+                variant_id = None
+        quantity = max(1, form.quantity.data or 1)
+        amount_cents = int(Decimal(str(form.amount.data)) * 100)
+
+        stripe.api_key = current_app.config['STRIPE_SECRET_KEY']
+        try:
+            stripe_product = stripe.Product.create(name=form.description.data)
+            stripe_price = stripe.Price.create(
+                product=stripe_product.id,
+                unit_amount=amount_cents,
+                currency='usd',
+            )
+            metadata = {'description': form.description.data}
+            if product_id:
+                metadata['product_id'] = str(product_id)
+            if variant_id:
+                metadata['variant_id'] = str(variant_id)
+            metadata['quantity'] = str(quantity)
+            metadata['deduct_stock'] = '1' if (form.deduct_stock_on_paid.data and product_id) else '0'
+            if form.customer_email.data:
+                metadata['customer_email'] = form.customer_email.data.strip()
+
+            stripe_link = stripe.PaymentLink.create(
+                line_items=[{'price': stripe_price.id, 'quantity': quantity}],
+                metadata=metadata,
+            )
+        except Exception as e:
+            flash(f'Stripe error: {e}', 'error')
+            return render_template('admin/payment_link_form.html', form=form, link=None)
+
+        link = PaymentLink(
+            description=form.description.data,
+            amount=form.amount.data,
+            quantity=quantity,
+            customer_name=(form.customer_name.data or '').strip() or None,
+            customer_email=(form.customer_email.data or '').strip().lower() or None,
+            product_id=product_id,
+            variant_id=variant_id,
+            deduct_stock_on_paid=bool(form.deduct_stock_on_paid.data and product_id),
+            stripe_product_id=stripe_product.id,
+            stripe_price_id=stripe_price.id,
+            stripe_payment_link_id=stripe_link.id,
+            url=stripe_link.url,
+            status='active',
+            created_by_id=current_user.id,
+        )
+        db.session.add(link)
+        db.session.commit()
+
+        if form.send_email.data and link.customer_email:
+            _send_payment_link_email(link)
+
+        flash(f'Payment link created: {link.url}', 'success')
+        return redirect(url_for('admin.payment_link_detail', link_id=link.id))
+
+    return render_template('admin/payment_link_form.html', form=form, link=None)
+
+
+@admin_bp.route('/payment-links/variants/<int:product_id>')
+@admin_required
+def payment_link_variants(product_id):
+    variants = ProductVariant.query.filter_by(product_id=product_id, is_active=True)\
+        .order_by(ProductVariant.sort_order, ProductVariant.id).all()
+    return jsonify({'variants': [{'id': v.id, 'name': v.color_name,
+                                  'stock': v.stock_quantity} for v in variants]})
+
+
+@admin_bp.route('/payment-links/<int:link_id>')
+@admin_required
+def payment_link_detail(link_id):
+    link = PaymentLink.query.get_or_404(link_id)
+    return render_template('admin/payment_link_detail.html', link=link)
+
+
+@admin_bp.route('/payment-links/<int:link_id>/resend', methods=['POST'])
+@admin_required
+def resend_payment_link(link_id):
+    link = PaymentLink.query.get_or_404(link_id)
+    override_email = (request.form.get('customer_email') or '').strip().lower()
+    if override_email:
+        link.customer_email = override_email
+    if not link.customer_email:
+        flash('Add a customer email first.', 'error')
+        return redirect(url_for('admin.payment_link_detail', link_id=link.id))
+    ok, err = _send_payment_link_email(link)
+    if ok:
+        flash(f'Payment link emailed to {link.customer_email}.', 'success')
+    else:
+        flash(f'Could not send email: {err}', 'error')
+    return redirect(url_for('admin.payment_link_detail', link_id=link.id))
+
+
+@admin_bp.route('/payment-links/<int:link_id>/void', methods=['POST'])
+@admin_required
+def void_payment_link(link_id):
+    import stripe
+    link = PaymentLink.query.get_or_404(link_id)
+    if link.status == 'paid':
+        flash('Cannot void a link that has already been paid.', 'error')
+        return redirect(url_for('admin.payment_link_detail', link_id=link.id))
+    if current_app.config.get('STRIPE_SECRET_KEY') and link.stripe_payment_link_id:
+        stripe.api_key = current_app.config['STRIPE_SECRET_KEY']
+        try:
+            stripe.PaymentLink.modify(link.stripe_payment_link_id, active=False)
+        except Exception as e:
+            flash(f'Stripe deactivation warning: {e}', 'warning')
+    link.status = 'void'
+    db.session.commit()
+    flash('Payment link voided.', 'success')
+    return redirect(url_for('admin.payment_links'))
+
+
+def _send_payment_link_email(link):
+    """Best-effort email send. Returns (ok, error_message)."""
+    from app.services.mailer import send_email
+    greeting = f'Hi {link.customer_name},' if link.customer_name else 'Hi there,'
+    html = f"""
+        <p>{greeting}</p>
+        <p>Here is your payment link from Smart 99¢ Plus:</p>
+        <p><strong>{link.description}</strong><br>
+        Amount: <strong>${link.amount}</strong></p>
+        <p><a href="{link.url}" style="display:inline-block;padding:10px 18px;background:#E8334A;color:#fff;text-decoration:none;border-radius:6px;">Pay now</a></p>
+        <p>Or copy this URL into your browser: <br><a href="{link.url}">{link.url}</a></p>
+        <p style="color:#888;font-size:0.85em;">If you did not request this, please ignore this email.</p>
+    """
+    text = (f'{greeting}\n\nYour payment link from Smart 99¢ Plus:\n'
+            f'{link.description}\nAmount: ${link.amount}\n\n{link.url}\n')
+    try:
+        send_email(link.customer_email, f'Payment link: {link.description}', html, text_body=text)
+        link.email_sent_at = datetime.utcnow()
+        db.session.commit()
+        return True, None
+    except Exception as e:
+        return False, str(e)

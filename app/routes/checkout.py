@@ -5,8 +5,10 @@ from flask import (Blueprint, render_template, request, session, jsonify,
 from flask_login import current_user
 from flask_wtf import FlaskForm
 from wtforms import StringField, SelectField, validators
+from datetime import datetime
 from app.extensions import db
-from app.models import Order, OrderItem, ShippingAddress, ShippingRate, Product
+from app.models import (Order, OrderItem, ShippingAddress, ShippingRate, Product,
+                        ProductVariant, PaymentLink)
 from app.helpers import get_cart_items, get_cart_subtotal, generate_order_number
 
 checkout_bp = Blueprint('checkout', __name__)
@@ -219,5 +221,31 @@ def stripe_webhook():
         if order:
             order.status = 'cancelled'
             db.session.commit()
+
+    elif event['type'] == 'checkout.session.completed':
+        sess = event['data']['object']
+        payment_link_id = sess.get('payment_link')
+        if not payment_link_id:
+            return '', 200
+        link = PaymentLink.query.filter_by(stripe_payment_link_id=payment_link_id).first()
+        if not link or link.status == 'paid':
+            return '', 200
+
+        link.status = 'paid'
+        link.paid_at = datetime.utcnow()
+        link.stripe_checkout_session_id = sess.get('id')
+
+        if link.deduct_stock_on_paid and link.product_id:
+            product = Product.query.get(link.product_id)
+            if product and product.track_inventory:
+                qty = link.quantity or 1
+                if link.variant_id:
+                    variant = ProductVariant.query.get(link.variant_id)
+                    if variant:
+                        variant.stock_quantity = max(0, variant.stock_quantity - qty)
+                else:
+                    product.stock_quantity = max(0, product.stock_quantity - qty)
+
+        db.session.commit()
 
     return '', 200
