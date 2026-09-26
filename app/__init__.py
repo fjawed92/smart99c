@@ -1,6 +1,7 @@
 import cloudinary
 from datetime import datetime
 from flask import Flask
+from sqlalchemy.exc import SQLAlchemyError
 from config import config
 from app.extensions import db, login_manager, migrate, csrf, mail
 
@@ -64,20 +65,32 @@ def create_app(config_name='default'):
     @app.context_processor
     def inject_globals():
         cart_count = get_cart_count()
-        announcement = get_site_setting('announcement', '')
-        categories = Category.query.filter_by(is_active=True).order_by(Category.name).all()
+        try:
+            categories = Category.query.filter_by(is_active=True).order_by(Category.name).all()
+            db_ok = True
+        except SQLAlchemyError:
+            # Database unreachable — still render pages (incl. the error page)
+            # instead of crashing inside the error handler.
+            db.session.rollback()
+            app.logger.exception('Database unavailable while building page globals')
+            categories, db_ok = [], False
+
+        def setting(key, default=''):
+            return get_site_setting(key, default) if db_ok else default
+
+        announcement = setting('announcement', '')
         footer_social = {
             'facebook': {
-                'url': get_site_setting('facebook_url', ''),
-                'active': get_site_setting('facebook_active', '1') == '1',
+                'url': setting('facebook_url', ''),
+                'active': setting('facebook_active', '1') == '1',
             },
             'instagram': {
-                'url': get_site_setting('instagram_url', ''),
-                'active': get_site_setting('instagram_active', '1') == '1',
+                'url': setting('instagram_url', ''),
+                'active': setting('instagram_active', '1') == '1',
             },
             'tiktok': {
-                'url': get_site_setting('tiktok_url', ''),
-                'active': get_site_setting('tiktok_active', '1') == '1',
+                'url': setting('tiktok_url', ''),
+                'active': setting('tiktok_active', '1') == '1',
             },
         }
         return dict(

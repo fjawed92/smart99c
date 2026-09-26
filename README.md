@@ -46,9 +46,29 @@ python run.py
 
 ## Deployment (Render)
 
-Start command: `gunicorn run:app`
+- **Build command:** `pip install -r requirements.txt`
+- **Start command:** `python init_db.py && gunicorn run:app`
+- **Python version:** pinned by `.python-version` (3.11.9)
 
-Set all environment variables from `.env.example` in Render dashboard.
+Set all environment variables from `.env.example` in the Render dashboard.
+
+`init_db.py` runs on every start. It creates missing tables and columns and,
+if the database has no admin yet, creates one from `ADMIN_EMAIL` /
+`ADMIN_PASSWORD`. It never deletes data.
+
+### Recovering from a deleted database
+
+Render deletes **free** Postgres databases after 30 days. The web service then
+logs `failed to resolve host 'dpg-…'`. To recover:
+
+1. Render → **New → PostgreSQL**, same region as the web service. Choose a
+   paid plan (Basic) so it is not deleted again.
+2. Copy the new database's **Internal Database URL**.
+3. Web service → **Environment** → set `DATABASE_URL` to that URL, and set
+   `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
+4. Web service → **Settings** → Start Command `python init_db.py && gunicorn run:app`.
+5. **Manual Deploy → Deploy latest commit**, then log in at `/login`.
+6. Re-add products with **Admin → Products → Import** (Excel).
 
 ## Admin Access
 
