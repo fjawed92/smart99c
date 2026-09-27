@@ -1,5 +1,5 @@
 /* ============================================================
-   Smart 99¢ Plus — Main JavaScript
+   Smart 99¢ Plus — Main JavaScript (cart drawer, add to cart, toasts)
    ============================================================ */
 
 'use strict';
@@ -9,6 +9,20 @@
 const cartDrawer  = document.getElementById('cartDrawer');
 const cartOverlay = document.getElementById('cartOverlay');
 const cartCloseBtn = document.getElementById('cartCloseBtn');
+
+// Free local delivery progress bar in the drawer
+function updateFreeBar(subtotal) {
+  const bar = document.getElementById('freeBar');
+  if (!bar) return;
+  const threshold = parseFloat(bar.dataset.threshold || '0');
+  if (!threshold) return;
+  bar.hidden = !subtotal;
+  const left = Math.max(0, threshold - subtotal);
+  document.getElementById('freeBarText').innerHTML = left > 0
+    ? `Add <b>$${left.toFixed(2)}</b> for free local delivery`
+    : '<b>Free local delivery unlocked</b>';
+  document.getElementById('freeBarFill').style.width = Math.min(100, (subtotal / threshold) * 100) + '%';
+}
 
 function openCartDrawer() {
   if (!cartDrawer) return;
@@ -43,7 +57,7 @@ document.addEventListener('keydown', e => {
 function updateCartBadges(count) {
   document.querySelectorAll('#cartBadge, #cartBadgeDesktop').forEach(badge => {
     badge.textContent = count;
-    badge.style.display = count > 0 ? 'flex' : 'none';
+    if (badge.id === 'cartBadgeDesktop') badge.style.display = 'inline-flex';
   });
 }
 
@@ -123,12 +137,12 @@ async function refreshCartDrawer() {
 
     if (!data.items || data.items.length === 0) {
       body.innerHTML = `
-        <div class="text-center py-5 text-muted" id="cartEmptyMsg">
-          <i class="bi bi-bag-x" style="font-size:3rem;"></i>
-          <p class="mt-3">Your cart is empty</p>
-          <a href="/shop" class="btn btn-primary btn-sm">Start Shopping</a>
+        <div class="text-center py-5" id="cartEmptyMsg">
+          <p class="lbl text-muted">Your cart is empty</p>
+          <a href="/shop" class="btn btn-primary btn-sm">Start shopping</a>
         </div>`;
       footer?.classList.add('d-none');
+      updateFreeBar(0);
       return;
     }
 
@@ -141,23 +155,23 @@ async function refreshCartDrawer() {
       <div class="drawer-cart-item" id="drawerItem_${keyAttr}">
         ${item.image_url
           ? `<img src="${escAttr(item.image_url)}" alt="${escHtml(item.name)}" class="drawer-item-img" />`
-          : `<div class="drawer-item-img" style="display:flex;align-items:center;justify-content:center;"><i class="bi bi-image text-muted"></i></div>`
+          : `<div class="drawer-item-img" style="display:flex;align-items:center;justify-content:center;"><i class="bi bi-box-seam"></i></div>`
         }
         <div class="drawer-item-info">
           <div class="drawer-item-name">${escHtml(item.name)}</div>
           ${colorChip}
           <div class="drawer-item-price">$${item.unit_price.toFixed(2)}</div>
           <div class="d-flex align-items-center gap-2 mt-1">
-            <div class="quantity-selector" style="border-radius:7px;">
-              <button class="qty-btn drawer-qty-minus" data-line-key="${escAttr(item.line_key)}" style="padding:.25rem .5rem;font-size:.85rem;">
+            <div class="quantity-selector">
+              <button class="qty-btn drawer-qty-minus" data-line-key="${escAttr(item.line_key)}" aria-label="Decrease quantity">
                 <i class="bi bi-dash"></i>
               </button>
-              <span style="padding:0 .4rem;font-size:.85rem;font-weight:700;">${item.quantity}</span>
-              <button class="qty-btn drawer-qty-plus" data-line-key="${escAttr(item.line_key)}" style="padding:.25rem .5rem;font-size:.85rem;">
+              <span class="mono" style="padding:0 .45rem;font-weight:600;">${item.quantity}</span>
+              <button class="qty-btn drawer-qty-plus" data-line-key="${escAttr(item.line_key)}" aria-label="Increase quantity">
                 <i class="bi bi-plus"></i>
               </button>
             </div>
-            <span class="text-muted small">$${(item.unit_price * item.quantity).toFixed(2)}</span>
+            <span class="mono small">$${(item.unit_price * item.quantity).toFixed(2)}</span>
           </div>
         </div>
         <button class="drawer-item-remove" data-line-key="${escAttr(item.line_key)}" title="Remove">
@@ -171,6 +185,7 @@ async function refreshCartDrawer() {
       const subtotalEl = document.getElementById('drawerSubtotal');
       if (subtotalEl) subtotalEl.textContent = `$${data.subtotal.toFixed(2)}`;
     }
+    updateFreeBar(data.subtotal);
 
   } catch (err) {
     // silently fail — drawer content just won't update
@@ -303,12 +318,12 @@ function showToast(message, type = 'success') {
   const container = getOrCreateToastContainer();
   const id = `toast-${Date.now()}`;
   const iconMap = { success: 'bi-check-circle-fill', error: 'bi-x-circle-fill', warning: 'bi-exclamation-triangle-fill', info: 'bi-info-circle-fill' };
-  const colorMap = { success: 'var(--teal)', error: 'var(--primary)', warning: 'var(--accent)', info: '#0dcaf0' };
+  const colorMap = { success: 'var(--ok)', error: 'var(--red)', warning: 'var(--ink)', info: 'var(--ink)' };
 
   const el = document.createElement('div');
   el.id = id;
   el.className = 'toast align-items-center show';
-  el.style.cssText = `--bs-toast-border-color:${colorMap[type] || colorMap.success};min-width:260px;`;
+  el.style.cssText = 'min-width:260px;';
   el.setAttribute('role', 'alert');
   el.innerHTML = `
     <div class="d-flex align-items-center gap-2 p-3">
@@ -343,19 +358,6 @@ function escHtml(str) {
   const d = document.createElement('div');
   d.appendChild(document.createTextNode(str));
   return d.innerHTML;
-}
-
-// ── Navbar Scroll Shadow ───────────────────────────────────────
-
-const mainNav = document.getElementById('mainNav');
-if (mainNav) {
-  window.addEventListener('scroll', () => {
-    if (window.scrollY > 10) {
-      mainNav.style.boxShadow = '0 2px 20px rgba(0,0,0,.12)';
-    } else {
-      mainNav.style.boxShadow = '0 1px 12px rgba(0,0,0,.07)';
-    }
-  }, { passive: true });
 }
 
 // ── Auto-dismiss Flash Alerts ──────────────────────────────────

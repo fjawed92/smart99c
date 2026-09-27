@@ -61,12 +61,18 @@ def create_app(config_name='default'):
     # Jinja2 globals
     from app.models import SiteSettings, Category
     from app.helpers import get_cart_count, get_site_setting
+    from app.art import product_art, category_art, art_svg, art_kind
+
+    app.jinja_env.globals.update(product_art=product_art, category_art=category_art,
+                                 art_svg=art_svg, art_kind=art_kind)
+
+    from app.store import STORE
 
     @app.context_processor
     def inject_globals():
         cart_count = get_cart_count()
         try:
-            categories = Category.query.filter_by(is_active=True).order_by(Category.name).all()
+            categories = Category.query.filter_by(is_active=True).order_by(Category.sort_order, Category.name).all()
             db_ok = True
         except SQLAlchemyError:
             # Database unreachable — still render pages (incl. the error page)
@@ -79,6 +85,23 @@ def create_app(config_name='default'):
             return get_site_setting(key, default) if db_ok else default
 
         announcement = setting('announcement', '')
+
+        # Admin → Settings can override hours and the free-delivery amount.
+        store = dict(STORE)
+        hours_text = setting('store_hours', '').strip()
+        if hours_text:
+            hours = []
+            for line in hours_text.splitlines():
+                day, sep, time = line.partition(':')
+                if line.strip():
+                    hours.append((day.strip(), time.strip()) if sep else (line.strip(), ''))
+            store['hours'] = hours or STORE['hours']
+        try:
+            threshold = float(setting('free_shipping_threshold', '') or 0)
+            if threshold > 0:
+                store['free_delivery_over'] = int(threshold) if threshold.is_integer() else threshold
+        except ValueError:
+            pass
         footer_social = {
             'facebook': {
                 'url': setting('facebook_url', ''),
@@ -99,6 +122,7 @@ def create_app(config_name='default'):
             nav_categories=categories,
             footer_social=footer_social,
             stripe_public_key=app.config.get('STRIPE_PUBLIC_KEY', ''),
+            store=store,
             current_year=datetime.utcnow().year,
         )
 

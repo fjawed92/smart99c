@@ -3,6 +3,10 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, TextAreaField, validators
 from app.models import Product, Category
 from app.helpers import get_site_setting
+from app.extensions import db
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+from app.store import STORE
 
 main_bp = Blueprint('main', __name__)
 
@@ -17,14 +21,41 @@ class ContactForm(FlaskForm):
 @main_bp.route('/')
 def index():
     featured_products = Product.query.filter_by(is_active=True, is_featured=True)\
-        .limit(8).all()
+        .order_by(Product.updated_at.desc()).limit(8).all()
+    new_products = Product.query.filter_by(is_active=True)\
+        .order_by(Product.created_at.desc()).limit(8).all()
     categories = Category.query.filter_by(is_active=True)\
-        .order_by(Category.sort_order, Category.name).limit(6).all()
-    free_shipping_threshold = get_site_setting('free_shipping_threshold', '50')
+        .order_by(Category.sort_order, Category.name).limit(8).all()
+
+    # Lead tile: the trading-card category if there is one, else the first category.
+    lead = next((c for c in categories if any(k in c.name.lower() for k in ('pokémon', 'pokemon', 'tcg', 'card'))),
+                categories[0] if categories else None)
+    others = [c for c in categories if c is not lead]
+
+    from_price = None
+    if lead:
+        from_price = db.session.query(db.func.min(Product.price))\
+            .filter(Product.is_active.is_(True), Product.category_id == lead.id).scalar()
+
     return render_template('index.html',
                            featured_products=featured_products,
+                           new_products=new_products,
                            categories=categories,
-                           free_shipping_threshold=free_shipping_threshold)
+                           lead_category=lead,
+                           other_categories=others,
+                           from_price=from_price,
+                           next_restock=next_restock_iso())
+
+
+def next_restock_iso(now=None):
+    """Next weekly restock (store's local time, New York) as an ISO timestamp."""
+    tz = ZoneInfo('America/New_York')
+    now = now or datetime.now(tz)
+    weekday, hour = STORE['restock_weekday'], STORE['restock_hour']
+    target = now.replace(hour=hour, minute=0, second=0, microsecond=0) + timedelta(days=(weekday - now.weekday()) % 7)
+    if target <= now:
+        target += timedelta(days=7)
+    return target.isoformat()
 
 
 @main_bp.route('/about')

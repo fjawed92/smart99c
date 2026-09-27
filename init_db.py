@@ -7,7 +7,8 @@ Render's start command runs this before gunicorn:
 It:
     1. creates any missing tables (a brand-new, empty database works),
     2. adds columns introduced by later releases (same checks as upgrade_db.py),
-    3. creates the first admin from ADMIN_EMAIL / ADMIN_PASSWORD when the
+    3. adds starter categories and delivery options to an empty store,
+    4. creates the first admin from ADMIN_EMAIL / ADMIN_PASSWORD when the
        database has no admin yet.
 
 Nothing here deletes or overwrites existing data.
@@ -21,7 +22,9 @@ from sqlalchemy import inspect, text
 
 from app import create_app
 from app.extensions import db
-from app.models import User
+from app.models import User, Category, ShippingRate
+from app.defaults import ensure_defaults
+from app.helpers import generate_slug
 
 # (table, column, SQL type) added after the first release.
 EXTRA_COLUMNS = [
@@ -67,6 +70,8 @@ def init_db(app=None):
     app = app or create_app(os.environ.get('FLASK_ENV', 'development'))
     with app.app_context():
         ensure_schema()
+        for what in ensure_defaults(db, Category, ShippingRate, generate_slug):
+            print(f'Created starter {what}.')
         ensure_admin()
     print('Database ready.')
 

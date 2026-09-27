@@ -1,217 +1,130 @@
 {% extends "base.html" %}
 
-{% block title %}Smart 99¢ Plus — Value Shopping in West Babylon, NY{% endblock %}
-
 {% block content %}
+{% macro cat_tile(cat, cls, label, tint='#E8334A', art_width=None) -%}
+  <a href="{{ url_for('shop.shop_category', category_slug=cat.slug) }}" class="tile {{ cls }}">
+    <span class="lbl">{{ label }}</span>
+    <h3>{{ cat.name }}</h3>
+    <div class="art"{% if art_width %} style="width:{{ art_width }}"{% endif %}>
+      {% if cat.image_url %}<img src="{{ cat.image_url }}" alt="" loading="lazy" />{% else %}{{ category_art(cat, tint) }}{% endif %}
+    </div>
+  </a>
+{%- endmacro %}
 
-<!-- Hero Banner -->
-<section class="hero-section">
-  <div class="container">
-    <div class="row align-items-center min-vh-75">
-      <div class="col-lg-6">
-        <div class="hero-badge mb-3">🛒 New Arrivals Every Week</div>
-        <h1 class="hero-headline">
-          Big Deals.<br />
-          <span class="text-accent">Tiny Prices.</span><br />
-          Always.
-        </h1>
-        <p class="hero-subtext">
-          Quality everyday essentials starting at just 99¢. Shop online or visit us at 66 NY-109, West Babylon, NY.
-        </p>
-        <div class="hero-actions">
-          <a href="{{ url_for('shop.shop') }}" class="btn btn-hero-primary btn-lg me-3">
-            Shop Now <i class="bi bi-arrow-right ms-2"></i>
-          </a>
-          <a href="{{ url_for('main.about') }}" class="btn btn-hero-outline btn-lg">
-            Our Story
-          </a>
-        </div>
-      </div>
-      <div class="col-lg-6 d-none d-lg-block">
-        <div class="hero-graphic">
-          <div class="hero-shape-1"></div>
-          <div class="hero-shape-2"></div>
-          <div class="hero-price-bubble">
-            <span class="bubble-label">Starting at</span>
-            <span class="bubble-price">99¢</span>
-          </div>
-        </div>
+<section class="container hero">
+  <div class="hero-top">
+    <h1>Game night <span class="r">starts</span> <span class="u">here.</span></h1>
+    <div class="hside">
+      <span class="lbl" style="color:var(--red)">Smart 99¢ Plus · West Babylon, NY</span>
+      <p>Toys, board games and Pokémon cards from your neighborhood store. Order online, pick up today.</p>
+      <div class="cta">
+        {% if lead_category %}
+        <a class="btn btn-primary" href="{{ url_for('shop.shop_category', category_slug=lead_category.slug) }}">Shop {{ lead_category.name }}</a>
+        {% endif %}
+        <a class="btn" href="{{ url_for('shop.shop') }}">Shop everything</a>
       </div>
     </div>
   </div>
-  <div class="hero-wave">
-    <svg viewBox="0 0 1440 80" preserveAspectRatio="none"><path d="M0,40 C360,80 1080,0 1440,40 L1440,80 L0,80 Z" fill="#ffffff"/></svg>
-  </div>
-</section>
 
-<!-- Store Info Strip -->
-<section class="info-strip py-3">
-  <div class="container">
-    <div class="row g-0 text-center">
-      <div class="col-md-4 info-strip-item">
-        <i class="bi bi-geo-alt-fill"></i>
-        <div>
-          <strong>Visit Us</strong>
-          <span>66 NY-109, West Babylon, NY</span>
-        </div>
-      </div>
-      <div class="col-md-4 info-strip-item">
-        <i class="bi bi-telephone-fill"></i>
-        <div>
-          <strong>Call Us</strong>
-          <span><a href="tel:5168518097">516-851-8097</a></span>
-        </div>
-      </div>
-      <div class="col-md-4 info-strip-item">
-        <i class="bi bi-truck"></i>
-        <div>
-          <strong>Free Shipping</strong>
-          <span>On orders over ${{ free_shipping_threshold }}</span>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- Category Grid -->
-{% if categories %}
-<section class="section-padded">
-  <div class="container">
-    <div class="section-header text-center mb-5">
-      <h2 class="section-title">Shop by Category</h2>
-      <p class="section-subtitle">Find what you need in our wide selection</p>
-    </div>
-    <div class="row g-3">
-      {% for category in categories %}
-      <div class="col-6 col-md-4 col-lg-3">
-        <a href="{{ url_for('shop.shop_category', category_slug=category.slug) }}" class="category-card">
-          <div class="category-card-img">
-            {% if category.image_url %}
-            <img src="{{ category.image_url }}" alt="{{ category.name }}" />
-            {% else %}
-            <div class="category-placeholder"><i class="bi bi-grid-3x3-gap-fill"></i></div>
-            {% endif %}
-          </div>
-          <div class="category-card-body">
-            <h6>{{ category.name }}</h6>
-          </div>
-        </a>
-      </div>
-      {% endfor %}
-    </div>
-    <div class="text-center mt-4">
-      <a href="{{ url_for('shop.shop') }}" class="btn btn-outline-primary">Browse All Categories</a>
-    </div>
-  </div>
-</section>
-{% endif %}
-
-<!-- Featured Products -->
-{% if featured_products %}
-<section class="section-padded bg-light-tinted">
-  <div class="container">
-    <div class="section-header d-flex align-items-center justify-content-between mb-5">
+  <div class="bento">
+    {% if lead_category %}
+    <a href="{{ url_for('shop.shop_category', category_slug=lead_category.slug) }}" class="tile t1">
+      <span class="lbl">{{ store.restock_day }} drop</span>
       <div>
-        <h2 class="section-title mb-1">Featured Products</h2>
-        <p class="section-subtitle mb-0">Hand-picked deals just for you</p>
+        <h3>{{ lead_category.name }}</h3>
+        <p>New stock lands every {{ store.restock_label | replace('Fridays', 'Friday') }}. Next restock in</p>
+        <div class="countdown" id="restockCountdown" data-target="{{ next_restock }}">
+          <span data-u="d">--<small>DAYS</small></span><span data-u="h">--<small>HRS</small></span><span data-u="m">--<small>MIN</small></span>
+        </div>
       </div>
-      <a href="{{ url_for('shop.shop') }}" class="btn btn-outline-primary d-none d-md-block">View All</a>
-    </div>
-    <div class="row g-3">
-      {% for product in featured_products %}
-      <div class="col-6 col-md-4 col-lg-3">
-        {% include '_product_card.html' %}
-      </div>
-      {% endfor %}
-    </div>
-    <div class="text-center mt-4 d-md-none">
-      <a href="{{ url_for('shop.shop') }}" class="btn btn-outline-primary">View All Products</a>
-    </div>
+      <div class="art">{% if lead_category.image_url %}<img src="{{ lead_category.image_url }}" alt="" />{% else %}{{ art_svg('box', '#E8334A') }}{% endif %}</div>
+    </a>
+    {% else %}
+    <a href="{{ url_for('shop.shop') }}" class="tile t1"><span class="lbl">New every week</span><h3>Toys, games &amp; cards</h3><div class="art">{{ art_svg('box', '#E8334A') }}</div></a>
+    {% endif %}
+
+    {% if other_categories|length > 0 %}{{ cat_tile(other_categories[0], 't2', 'Shop the aisle', '#F5C518', '34%') }}
+    {% else %}<a href="{{ url_for('shop.shop') }}" class="tile t2"><span class="lbl">Family night</span><h3>Board games</h3><div class="art" style="width:34%">{{ art_svg('game', '#F5C518') }}</div></a>{% endif %}
+
+    <a href="{{ url_for('shop.shop_category', category_slug=lead_category.slug) if lead_category else url_for('shop.shop') }}" class="tile t3">
+      <span class="lbl">{{ 'Packs & boxes' if lead_category else 'Everyday prices' }}</span>
+      <div><span class="lbl">From</span><div class="big">${{ "%.2f"|format(from_price or 0.99) }}</div></div>
+      <div class="art" style="width:36%">{{ art_svg('pack', '#E8334A') }}</div>
+    </a>
+
+    <div class="tile t4"><div><b>1 HR</b><span class="lbl">Store pickup</span></div></div>
+
+    {% if other_categories|length > 1 %}{{ cat_tile(other_categories[1], 't5', 'Just in', '#E8334A', '40%') }}
+    {% else %}<a href="{{ url_for('shop.shop') }}" class="tile t5"><span class="lbl">Soft &amp; squishy</span><h3>Plush</h3><div class="art" style="width:40%">{{ art_svg('plush', '#E8334A') }}</div></a>{% endif %}
+
+    {% if other_categories|length > 2 %}{{ cat_tile(other_categories[2], 't6', 'Collect them all', '#E8334A', '38%') }}
+    {% else %}<a href="{{ url_for('shop.shop') }}" class="tile t6"><span class="lbl">Collect the squad</span><h3>Figures</h3><div class="art" style="width:38%">{{ art_svg('figure', '#E8334A') }}</div></a>{% endif %}
+
+    {% if other_categories|length > 3 %}{{ cat_tile(other_categories[3], 't7', 'Top sellers', '#F5C518', '36%') }}
+    {% else %}<a href="{{ url_for('shop.shop') }}" class="tile t7"><span class="lbl">Protect your pulls</span><h3>Sleeves &amp; storage</h3><div class="art" style="width:36%">{{ art_svg('sleeve', '#F5C518') }}</div></a>{% endif %}
   </div>
 </section>
+
+{% if featured_products %}
+<section class="section-padded"><div class="container">
+  <div class="sechead"><h2>Staff picks</h2><a class="ulink" href="{{ url_for('shop.shop') }}">Shop all products</a></div>
+  <div class="pgrid">
+    {% for product in featured_products[:8] %}{% include '_product_card.html' %}{% endfor %}
+  </div>
+</div></section>
 {% endif %}
 
-<!-- About Blurb -->
-<section class="section-padded">
-  <div class="container">
-    <div class="row align-items-center g-5">
-      <div class="col-lg-6">
-        <div class="about-badge mb-3">🏪 Locally Owned & Operated</div>
-        <h2 class="section-title">Your Neighborhood Value Store</h2>
-        <p class="text-muted mb-4">
-          Smart 99¢ Plus has been serving the West Babylon community with affordable everyday essentials, party supplies, cleaning products, and so much more. We believe everyone deserves quality at prices that won't break the bank.
-        </p>
-        <div class="row g-3 mb-4">
-          <div class="col-6">
-            <div class="stat-card">
-              <div class="stat-number">1000+</div>
-              <div class="stat-label">Products</div>
-            </div>
-          </div>
-          <div class="col-6">
-            <div class="stat-card">
-              <div class="stat-number">99¢</div>
-              <div class="stat-label">Starting Price</div>
-            </div>
-          </div>
-        </div>
-        <a href="{{ url_for('main.about') }}" class="btn btn-primary">Learn More About Us</a>
-      </div>
-      <div class="col-lg-6">
-        <div class="store-info-card">
-          <h5 class="mb-3"><i class="bi bi-clock me-2 text-primary"></i>Store Hours</h5>
-          <table class="table table-sm table-borderless mb-0">
-            <tbody>
-              <tr><td class="fw-600">Monday – Friday</td><td>9:00 AM – 8:00 PM</td></tr>
-              <tr><td class="fw-600">Saturday</td><td>9:00 AM – 8:00 PM</td></tr>
-              <tr><td class="fw-600">Sunday</td><td>10:00 AM – 6:00 PM</td></tr>
-            </tbody>
-          </table>
-          <hr />
-          <div class="d-flex gap-3">
-            <a href="tel:5168518097" class="btn btn-outline-primary btn-sm flex-grow-1">
-              <i class="bi bi-telephone me-2"></i>Call Us
-            </a>
-            <a href="{{ url_for('main.contact') }}" class="btn btn-primary btn-sm flex-grow-1">
-              <i class="bi bi-envelope me-2"></i>Email Us
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
+<section class="section-padded" style="padding-top:{{ '0' if featured_products else '56px' }}"><div class="container">
+  <div class="sechead"><h2>Order online, <span style="color:var(--red)">pick up today</span></h2></div>
+  <div class="steps" id="pickup">
+    <div class="step"><div class="k">1</div><h3>Shop online</h3><p>Add toys, games and cards to your cart any time, day or night.</p></div>
+    <div class="step"><div class="k">2</div><h3>We pack it</h3><p>Your order is ready at the counter in {{ store.pickup_time }}.</p></div>
+    <div class="step"><div class="k">3</div><h3>Grab &amp; go</h3><p>Show your order number at {{ store.address_short }}, or get free local delivery over ${{ store.free_delivery_over }}.</p></div>
   </div>
-</section>
+</div></section>
 
-<!-- Trust Badges -->
-<section class="trust-strip py-4">
-  <div class="container">
-    <div class="row g-3 text-center">
-      <div class="col-6 col-md-3">
-        <div class="trust-item">
-          <i class="bi bi-shield-check-fill"></i>
-          <span>Secure Checkout</span>
-        </div>
-      </div>
-      <div class="col-6 col-md-3">
-        <div class="trust-item">
-          <i class="bi bi-arrow-counterclockwise"></i>
-          <span>Easy Returns</span>
-        </div>
-      </div>
-      <div class="col-6 col-md-3">
-        <div class="trust-item">
-          <i class="bi bi-truck"></i>
-          <span>Fast Shipping</span>
-        </div>
-      </div>
-      <div class="col-6 col-md-3">
-        <div class="trust-item">
-          <i class="bi bi-headset"></i>
-          <span>Friendly Support</span>
-        </div>
-      </div>
-    </div>
+{% if new_products %}
+<section class="section-padded" style="padding-top:0"><div class="container">
+  <div class="sechead"><h2>New on the shelf</h2><a class="ulink" href="{{ url_for('shop.shop', sort='newest') }}">See all</a></div>
+  <div class="pgrid">
+    {% for product in new_products[:4] %}{% include '_product_card.html' %}{% endfor %}
   </div>
-</section>
+</div></section>
+{% endif %}
 
+{% if not featured_products and not new_products %}
+<section class="section-padded" style="padding-top:0"><div class="container">
+  <div class="empty-state"><h3>Fresh stock coming soon</h3><p class="text-muted mb-0">We're stocking the shelves. Check back shortly or visit us in West Babylon.</p></div>
+</div></section>
+{% endif %}
+
+<section class="visit"><div class="container">
+  <h2>Come play <span class="y">in person.</span></h2>
+  <dl>
+    <dt>Address</dt><dd>{{ store.address }}</dd>
+    <dt>Phone</dt><dd><a href="tel:{{ store.phone_href }}" class="mono">{{ store.phone }}</a></dd>
+    <dt>Hours</dt><dd>{% for d, h in store.hours %}{{ d }} {{ h }}{% if not loop.last %} · {% endif %}{% endfor %}</dd>
+    <dt>Restock</dt><dd>Pokémon TCG {{ store.restock_label }}</dd>
+  </dl>
+</div></section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  const el = document.getElementById('restockCountdown');
+  if (!el) return;
+  const target = new Date(el.dataset.target).getTime();
+  const units = { d: 'DAYS', h: 'HRS', m: 'MIN' };
+  function tick() {
+    let s = Math.max(0, Math.floor((target - Date.now()) / 1000));
+    const v = { d: Math.floor(s / 86400), h: Math.floor(s % 86400 / 3600), m: Math.floor(s % 3600 / 60) };
+    el.querySelectorAll('[data-u]').forEach(span => {
+      const u = span.dataset.u;
+      span.innerHTML = String(v[u]).padStart(2, '0') + '<small>' + units[u] + '</small>';
+    });
+  }
+  tick(); setInterval(tick, 30000);
+})();
+</script>
 {% endblock %}

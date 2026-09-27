@@ -4,115 +4,109 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="csrf-token" content="{{ csrf_token() }}" />
-  <title>{% block title %}Smart 99¢ Plus{% endblock %}</title>
-  <meta name="description" content="{% block meta_description %}Smart 99¢ Plus — Your neighborhood value store in West Babylon, NY. Shop online or visit us in-store!{% endblock %}" />
+  <title>{% block title %}Smart 99¢ Plus · Toys, Games & Pokémon Cards{% endblock %}</title>
+  <meta name="description" content="{% block meta_description %}Toys, board games and Pokémon TCG from Smart 99¢ Plus in West Babylon, NY. Order online, pick up today.{% endblock %}" />
+  <meta name="theme-color" content="#F5C518" />
 
-  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-
-  <!-- Bootstrap 5 -->
+  <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-
-  <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
-
-  <!-- Custom CSS -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
-
   {% block extra_head %}{% endblock %}
 </head>
 <body>
 
-  <!-- Announcement Bar -->
-  {% if announcement %}
-  <div class="announcement-bar">
-    <div class="container text-center">
-      <i class="bi bi-megaphone-fill me-2"></i>{{ announcement }}
-    </div>
-  </div>
-  {% endif %}
+  <header class="site-header">
+    <div class="container hdr">
+      <a href="{{ url_for('main.index') }}" class="logo" aria-label="Smart 99 cents Plus home">Smart<span class="n">99¢</span>Plus</a>
 
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-light sticky-top" id="mainNav">
-    <div class="container">
-      <!-- Logo -->
-      <a class="navbar-brand" href="{{ url_for('main.index') }}">
-        <span class="brand-smart">Smart</span>
-        <span class="brand-99">99¢</span>
-        <span class="brand-plus">Plus</span>
-      </a>
 
-      <!-- Mobile icons -->
-      <div class="d-flex align-items-center d-lg-none gap-2 ms-auto me-2">
-        <a href="{{ url_for('shop.shop') }}" class="nav-icon-btn"><i class="bi bi-search"></i></a>
-        <a href="{{ url_for('auth.login') if not current_user.is_authenticated else url_for('orders.account') }}" class="nav-icon-btn"><i class="bi bi-person"></i></a>
-        <button class="nav-icon-btn cart-toggle-btn position-relative" type="button">
-          <i class="bi bi-bag"></i>
-          <span class="cart-badge" id="cartBadge">{{ cart_count }}</span>
+      <form class="sbox hsearch" action="{{ url_for('shop.shop') }}" method="get" role="search">
+        <button type="submit" aria-label="Search"><i class="bi bi-search"></i></button>
+        <input name="q" placeholder="Search Pokémon, board games, plush…" aria-label="Search products" value="{{ request.args.get('q', '') }}" />
+      </form>
+
+      <div class="hicons">
+        {% if current_user.is_authenticated %}
+        <div class="dropdown acct">
+          <button class="hbtn dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Account">
+            <i class="bi bi-person"></i><span class="acct-label">{{ current_user.first_name }}</span>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="{{ url_for('orders.account') }}"><i class="bi bi-person-circle me-2"></i>My account</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('orders.order_list') }}"><i class="bi bi-bag-check me-2"></i>My orders</a></li>
+            {% if current_user.is_admin %}
+            <li><hr class="dropdown-divider" /></li>
+            <li><a class="dropdown-item" href="{{ url_for('admin.dashboard') }}"><i class="bi bi-speedometer2 me-2"></i>Admin panel</a></li>
+            {% endif %}
+            <li><hr class="dropdown-divider" /></li>
+            <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}"><i class="bi bi-box-arrow-right me-2"></i>Log out</a></li>
+          </ul>
+        </div>
+        {% else %}
+        <a href="{{ url_for('auth.login') }}" class="hbtn acct" aria-label="Log in"><i class="bi bi-person"></i><span class="acct-label">Log in</span></a>
+        {% endif %}
+        <button class="hbtn cart cart-toggle-btn" type="button" aria-label="Open cart">
+          <i class="bi bi-bag"></i><span class="cart-label">Cart</span>
+          <span class="cart-badge" id="cartBadgeDesktop">{{ cart_count }}</span>
+          <span id="cartBadge" hidden>{{ cart_count }}</span>
+        </button>
+        <button class="hbtn menu-btn" type="button" data-bs-toggle="collapse" data-bs-target="#mobileNav" aria-controls="mobileNav" aria-expanded="false" aria-label="Menu">
+          <i class="bi bi-list"></i>
         </button>
       </div>
+    </div>
 
-      <!-- Hamburger -->
-      <button class="navbar-toggler border-0 shadow-none" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
-        <span class="navbar-toggler-icon"></span>
-      </button>
+    <nav class="catbar" aria-label="Categories">
+      <div class="container">
+        <a href="{{ url_for('shop.shop') }}" class="{% if request.endpoint == 'shop.shop' %}is-active{% endif %}">Shop all</a>
+        {% for cat in nav_categories %}
+        <a href="{{ url_for('shop.shop_category', category_slug=cat.slug) }}"
+           class="{% if loop.first %}hot{% endif %}{% if request.view_args and request.view_args.get('category_slug') == cat.slug %} is-active{% endif %}">{{ cat.name }}</a>
+        {% endfor %}
+      </div>
+    </nav>
 
-      <!-- Nav links -->
-      <div class="collapse navbar-collapse" id="navMenu">
-        <ul class="navbar-nav mx-auto gap-1">
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('main.index') }}">Home</a></li>
-          <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="{{ url_for('shop.shop') }}" id="shopDropdown" role="button" data-bs-toggle="dropdown">
-              Shop
-            </a>
-            <ul class="dropdown-menu">
-              <li><a class="dropdown-item" href="{{ url_for('shop.shop') }}">All Products</a></li>
-              {% if nav_categories %}
-              <li><hr class="dropdown-divider" /></li>
-              {% for cat in nav_categories %}
-              <li><a class="dropdown-item" href="{{ url_for('shop.shop_category', category_slug=cat.slug) }}">{{ cat.name }}</a></li>
-              {% endfor %}
-              {% endif %}
-            </ul>
-          </li>
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('main.about') }}">About</a></li>
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('main.contact') }}">Contact</a></li>
-        </ul>
-
-        <!-- Desktop right icons -->
-        <div class="d-none d-lg-flex align-items-center gap-2">
-          <a href="{{ url_for('shop.shop') }}" class="nav-icon-btn" title="Search"><i class="bi bi-search"></i></a>
-          {% if current_user.is_authenticated %}
-          <div class="dropdown">
-            <button class="nav-icon-btn dropdown-toggle" data-bs-toggle="dropdown" title="Account">
-              <i class="bi bi-person"></i>
-            </button>
-            <ul class="dropdown-menu dropdown-menu-end">
-              <li><a class="dropdown-item" href="{{ url_for('orders.account') }}"><i class="bi bi-person-circle me-2"></i>My Account</a></li>
-              <li><a class="dropdown-item" href="{{ url_for('orders.order_list') }}"><i class="bi bi-bag-check me-2"></i>My Orders</a></li>
-              {% if current_user.is_admin %}
-              <li><hr class="dropdown-divider" /></li>
-              <li><a class="dropdown-item text-primary" href="{{ url_for('admin.dashboard') }}"><i class="bi bi-speedometer2 me-2"></i>Admin Panel</a></li>
-              {% endif %}
-              <li><hr class="dropdown-divider" /></li>
-              <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}"><i class="bi bi-box-arrow-right me-2"></i>Log Out</a></li>
-            </ul>
-          </div>
-          {% else %}
-          <a href="{{ url_for('auth.login') }}" class="nav-icon-btn" title="Login"><i class="bi bi-person"></i></a>
-          {% endif %}
-          <button class="nav-icon-btn cart-toggle-btn position-relative" type="button" title="Cart">
-            <i class="bi bi-bag"></i>
-            <span class="cart-badge" id="cartBadgeDesktop">{{ cart_count }}</span>
-          </button>
-        </div>
+    <div class="collapse mnav" id="mobileNav">
+      <div class="container">
+        <form class="sbox" action="{{ url_for('shop.shop') }}" method="get" role="search">
+          <button type="submit" aria-label="Search"><i class="bi bi-search"></i></button>
+          <input name="q" placeholder="Search toys & cards" aria-label="Search products" />
+        </form>
+        <a href="{{ url_for('shop.shop') }}">Shop everything</a>
+        {% for cat in nav_categories %}
+        <a href="{{ url_for('shop.shop_category', category_slug=cat.slug) }}">{{ cat.name }}</a>
+        {% endfor %}
+        <a href="{{ url_for('main.about') }}">About</a>
+        <a href="{{ url_for('main.contact') }}">Contact</a>
+        {% if current_user.is_authenticated %}
+        <a href="{{ url_for('orders.account') }}">My account</a>
+        {% if current_user.is_admin %}<a href="{{ url_for('admin.dashboard') }}">Admin panel</a>{% endif %}
+        <a href="{{ url_for('auth.logout') }}">Log out</a>
+        {% else %}
+        <a href="{{ url_for('auth.login') }}">Log in</a>
+        {% endif %}
       </div>
     </div>
-  </nav>
+  </header>
 
-  <!-- Flash Messages -->
+  {% set ticker_items = [
+      announcement,
+      'Pokémon TCG restock ' ~ store.restock_label,
+      'Free local delivery over $' ~ store.free_delivery_over,
+      'Same-day pickup in West Babylon',
+      'Board games, plush & action figures',
+      'Sleeves, binders & toploaders'
+  ] | select | list %}
+  <div class="ticker" aria-label="Store news">
+    <div class="ticker-track" aria-hidden="true">
+      {% for _ in range(2) %}{% for t in ticker_items %}<span>{{ t }}</span>{% endfor %}{% endfor %}
+    </div>
+    <span class="visually-hidden">{{ ticker_items | join('. ') }}</span>
+  </div>
+
   {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
   <div class="flash-container">
@@ -120,7 +114,7 @@
       {% for category, message in messages %}
       <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
         {{ message }}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
       </div>
       {% endfor %}
     </div>
@@ -128,114 +122,85 @@
   {% endif %}
   {% endwith %}
 
-  <!-- Main Content -->
   <main>
     {% block content %}{% endblock %}
   </main>
 
-  <!-- Footer -->
   <footer class="site-footer">
     <div class="container">
       <div class="row gy-4">
         <div class="col-lg-4">
-          <div class="footer-brand mb-3">
-            <span class="brand-smart">Smart</span>
-            <span class="brand-99">99¢</span>
-            <span class="brand-plus">Plus</span>
-          </div>
-          <p class="footer-copy small">Your favorite neighborhood value store. Quality products at unbeatable prices, online and in-store.</p>
-          <div class="social-links mt-3">
+          <a class="logo" href="{{ url_for('main.index') }}">Smart<span class="n">99¢</span>Plus</a>
+          <p class="mt-3 mb-3" style="max-width:34ch">Toys, games and trading cards from your neighborhood store in West Babylon, NY.</p>
+          <div class="social-links">
             {% if footer_social.facebook.active and footer_social.facebook.url %}<a href="{{ footer_social.facebook.url }}" class="social-link" target="_blank" rel="noopener noreferrer" aria-label="Facebook"><i class="bi bi-facebook"></i></a>{% endif %}
             {% if footer_social.instagram.active and footer_social.instagram.url %}<a href="{{ footer_social.instagram.url }}" class="social-link" target="_blank" rel="noopener noreferrer" aria-label="Instagram"><i class="bi bi-instagram"></i></a>{% endif %}
             {% if footer_social.tiktok.active and footer_social.tiktok.url %}<a href="{{ footer_social.tiktok.url }}" class="social-link" target="_blank" rel="noopener noreferrer" aria-label="TikTok"><i class="bi bi-tiktok"></i></a>{% endif %}
           </div>
         </div>
-
         <div class="col-lg-2 col-6">
-          <h6 class="footer-heading">Shop</h6>
+          <h6>Shop</h6>
           <ul class="footer-links">
-            <li><a href="{{ url_for('shop.shop') }}">All Products</a></li>
+            <li><a href="{{ url_for('shop.shop') }}">All products</a></li>
             {% for cat in nav_categories[:5] %}
             <li><a href="{{ url_for('shop.shop_category', category_slug=cat.slug) }}">{{ cat.name }}</a></li>
             {% endfor %}
           </ul>
         </div>
-
         <div class="col-lg-2 col-6">
-          <h6 class="footer-heading">Help</h6>
+          <h6>Help</h6>
           <ul class="footer-links">
-            <li><a href="{{ url_for('main.about') }}">About Us</a></li>
+            <li><a href="{{ url_for('main.about') }}">About us</a></li>
             <li><a href="{{ url_for('main.contact') }}">Contact</a></li>
-            <li><a href="{{ url_for('orders.order_list') if current_user.is_authenticated else url_for('auth.login') }}">Track Order</a></li>
-            <li><a href="#">Returns Policy</a></li>
-            <li><a href="#">Shipping Info</a></li>
+            <li><a href="{{ url_for('orders.order_list') if current_user.is_authenticated else url_for('auth.login') }}">Track an order</a></li>
+            <li><a href="{{ url_for('main.about') }}#pickup">Pickup &amp; delivery</a></li>
           </ul>
         </div>
-
         <div class="col-lg-4">
-          <h6 class="footer-heading">Visit Us</h6>
-          <address class="text-muted small mb-2">
-            <i class="bi bi-geo-alt-fill text-primary me-2"></i>
-            66 NY-109, West Babylon, NY 11704
-          </address>
-          <p class="text-muted small mb-2">
-            <i class="bi bi-telephone-fill text-primary me-2"></i>
-            <a href="tel:5168518097" class="text-muted text-decoration-none">516-851-8097</a>
-          </p>
-          <p class="text-muted small mb-2">
-            <i class="bi bi-globe text-primary me-2"></i>
-            <a href="https://smart99c.com" class="text-muted text-decoration-none">Smart99c.com</a>
-          </p>
-          <iframe
-            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3023.1234567890!2d-73.3456789!3d40.7123456!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zNDDCsDQyJzQ0LjQiTiA3M8KwMjAnNDQuNCJX!5e0!3m2!1sen!2sus!4v1234567890"
-            width="100%" height="120" style="border:0;border-radius:8px;" allowfullscreen="" loading="lazy"
-            referrerpolicy="no-referrer-when-downgrade" title="Store Location"></iframe>
+          <h6>Visit us</h6>
+          <ul class="footer-links">
+            <li><i class="bi bi-geo-alt me-2"></i>{{ store.address }}</li>
+            <li><i class="bi bi-telephone me-2"></i><a href="tel:{{ store.phone_href }}" class="mono">{{ store.phone }}</a></li>
+            {% for d, h in store.hours %}<li><i class="bi bi-clock me-2"></i>{{ d }} · {{ h }}</li>{% endfor %}
+          </ul>
         </div>
       </div>
-
-      <hr class="footer-divider" />
-
-      <div class="row align-items-center">
-        <div class="col-md-6 text-center text-md-start">
-          <p class="footer-legal small mb-0">&copy; {{ current_year }} Smart 99¢ Plus. All rights reserved.</p>
-        </div>
-        <div class="col-md-6 text-center text-md-end">
-          <img src="https://cdn.jsdelivr.net/npm/simple-icons@v11/icons/stripe.svg" alt="Stripe" height="22" class="me-2 opacity-50 footer-payment-logo" />
-          <img src="https://cdn.jsdelivr.net/npm/simple-icons@v11/icons/mastercard.svg" alt="Mastercard" height="22" class="me-2 opacity-50 footer-payment-logo" />
-          <img src="https://cdn.jsdelivr.net/npm/simple-icons@v11/icons/visa.svg" alt="Visa" height="22" class="opacity-50 footer-payment-logo" />
-        </div>
+      <div class="footer-legal">
+        <span>&copy; {{ current_year }} Smart 99¢ Plus. Pokémon and other names are trademarks of their respective owners.</span>
+        <span class="pay"><span>VISA</span><span>MASTERCARD</span><span>AMEX</span><span>APPLE PAY</span><span>GOOGLE PAY</span></span>
       </div>
     </div>
   </footer>
 
-  <!-- Cart Drawer -->
+  <!-- Cart drawer -->
   <div class="cart-drawer-overlay" id="cartOverlay"></div>
-  <div class="cart-drawer" id="cartDrawer">
+  <aside class="cart-drawer" id="cartDrawer" aria-label="Cart">
     <div class="cart-drawer-header">
-      <h5 class="mb-0"><i class="bi bi-bag me-2"></i>Your Cart</h5>
-      <button class="cart-close-btn" id="cartCloseBtn"><i class="bi bi-x-lg"></i></button>
+      <h5>Your cart</h5>
+      <button class="cart-close-btn" id="cartCloseBtn" aria-label="Close cart"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="freebar" id="freeBar" data-threshold="{{ store.free_delivery_over }}" hidden>
+      <span id="freeBarText"></span>
+      <div class="track"><div class="fill" id="freeBarFill" style="width:0"></div></div>
     </div>
     <div class="cart-drawer-body" id="cartDrawerBody">
-      <div class="text-center py-5 text-muted" id="cartEmptyMsg">
-        <i class="bi bi-bag-x" style="font-size:3rem;"></i>
-        <p class="mt-3">Your cart is empty</p>
-        <a href="{{ url_for('shop.shop') }}" class="btn btn-primary btn-sm">Start Shopping</a>
+      <div class="text-center py-5" id="cartEmptyMsg">
+        <p class="lbl text-muted">Your cart is empty</p>
+        <a href="{{ url_for('shop.shop') }}" class="btn btn-primary btn-sm">Start shopping</a>
       </div>
     </div>
     <div class="cart-drawer-footer d-none" id="cartDrawerFooter">
       <div class="d-flex justify-content-between align-items-center mb-3">
-        <strong>Subtotal</strong>
-        <strong class="text-primary fs-5" id="drawerSubtotal">$0.00</strong>
+        <span class="lbl">Subtotal</span>
+        <strong id="drawerSubtotal">$0.00</strong>
       </div>
-      <a href="{{ url_for('cart.cart') }}" class="btn btn-outline-dark w-100 mb-2">View Cart</a>
-      <a href="{{ url_for('checkout.checkout') }}" class="btn btn-primary w-100">Checkout</a>
-      <p class="text-muted text-center small mt-2 mb-0">Taxes & shipping calculated at checkout</p>
+      <a href="{{ url_for('checkout.checkout') }}" class="btn btn-primary w-100 mb-2">Checkout</a>
+      <a href="{{ url_for('cart.cart') }}" class="btn w-100">View cart</a>
+      <p class="text-muted text-center small mt-2 mb-0">Tax and delivery calculated at checkout</p>
     </div>
-  </div>
+  </aside>
 
-  <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <!-- Custom JS -->
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
   {% block extra_scripts %}{% endblock %}
 </body>

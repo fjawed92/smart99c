@@ -23,86 +23,82 @@
 {% set initial_price = (default_variant.effective_price if default_variant else product.price) %}
 {% set has_initial_stock = (initial_stock > 0) if product.track_inventory else true %}
 
-<div class="page-header-bar">
-  <div class="container">
-    <nav aria-label="breadcrumb">
-      <ol class="breadcrumb mb-0">
-        <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Home</a></li>
-        <li class="breadcrumb-item"><a href="{{ url_for('shop.shop') }}">Shop</a></li>
-        {% if product.category %}
-        <li class="breadcrumb-item"><a href="{{ url_for('shop.shop_category', category_slug=product.category.slug) }}">{{ product.category.name }}</a></li>
-        {% endif %}
-        <li class="breadcrumb-item active">{{ product.name }}</li>
-      </ol>
-    </nav>
-  </div>
-</div>
-
-<div class="container py-5">
-  <div class="row g-5">
-
-    <!-- Image Gallery -->
-    <div class="col-lg-6">
-      <div class="product-gallery">
-        <div class="product-main-image mb-3">
-          {% if initial_image_url %}
-          <img src="{{ initial_image_url }}" alt="{{ product.name }}" id="mainProductImage" class="img-fluid rounded-3" />
-          {% else %}
-          <div class="product-img-placeholder-lg rounded-3 d-flex align-items-center justify-content-center">
-            <i class="bi bi-image" style="font-size:5rem;color:var(--gray-200);"></i>
-          </div>
-          {% endif %}
-        </div>
-        {% if gallery|length > 1 or has_variants %}
-        <div class="product-thumbnails d-flex gap-2 flex-wrap">
-          {% for img in gallery %}
-          <div class="product-thumbnail {% if loop.first and not default_variant %}active{% endif %}" data-src="{{ img.image_url }}">
-            <img src="{{ img.image_url }}" alt="{{ product.name }} {{ loop.index }}" />
-          </div>
-          {% endfor %}
-          {% for v in active_variants %}
-            {% for img in v.images %}
-            <div class="product-thumbnail" data-src="{{ img.image_url }}" data-variant-id="{{ v.id }}">
-              <img src="{{ img.image_url }}" alt="{{ v.color_name }}" />
-            </div>
-            {% endfor %}
-          {% endfor %}
-        </div>
+<div class="container">
+  <div class="pd">
+    <!-- Gallery -->
+    <div>
+      <div class="stage">
+        {% if initial_image_url %}
+        <img src="{{ initial_image_url }}" alt="{{ product.name }}" id="mainProductImage" />
+        {% else %}
+        {{ product_art(product) }}
         {% endif %}
       </div>
+      {% if gallery|length > 1 or has_variants %}
+      <div class="product-thumbnails">
+        {% for img in gallery %}
+        <button type="button" class="product-thumbnail {% if loop.first and not default_variant %}active{% endif %}" data-src="{{ img.image_url }}" aria-label="View image {{ loop.index }}">
+          <img src="{{ img.image_url }}" alt="" />
+        </button>
+        {% endfor %}
+        {% for v in active_variants %}
+          {% for img in v.images %}
+          <button type="button" class="product-thumbnail" data-src="{{ img.image_url }}" data-variant-id="{{ v.id }}" aria-label="View {{ v.color_name }}">
+            <img src="{{ img.image_url }}" alt="" />
+          </button>
+          {% endfor %}
+        {% endfor %}
+      </div>
+      {% endif %}
     </div>
 
-    <!-- Product Info -->
-    <div class="col-lg-6">
-      {% if product.category %}
-      <span class="product-category-tag mb-2 d-inline-block">{{ product.category.name }}</span>
-      {% endif %}
+    <!-- Info -->
+    <div>
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('shop.shop') }}">Shop</a></li>
+          {% if product.category %}
+          <li class="breadcrumb-item"><a href="{{ url_for('shop.shop_category', category_slug=product.category.slug) }}">{{ product.category.name }}</a></li>
+          {% endif %}
+        </ol>
+      </nav>
 
       <h1 class="product-detail-title">{{ product.name }}</h1>
 
-      {% if product.sku %}
-      <p class="text-muted small mb-3">SKU: <span id="displaySku">{{ default_variant.sku if default_variant and default_variant.sku else product.sku }}</span></p>
-      {% endif %}
+      <div class="pmeta">
+        {% if product.category %}<a href="{{ url_for('shop.shop_category', category_slug=product.category.slug) }}">{{ product.category.name }}</a>{% endif %}
+        {% if product.sku %}<span>SKU <span id="displaySku" class="mono">{{ default_variant.sku if default_variant and default_variant.sku else product.sku }}</span></span>{% endif %}
+        <span>Pickup today</span>
+      </div>
 
-      <div class="product-detail-pricing mb-4">
+      <div class="product-detail-pricing">
         <span class="price-main" id="displayPrice">${{ "%.2f"|format(initial_price) }}</span>
         {% if product.is_on_sale and not default_variant %}
         <span class="price-compare">${{ "%.2f"|format(product.compare_price) }}</span>
-        <span class="badge bg-danger ms-2">Save {{ product.discount_percent }}%</span>
+        <span class="save-chip">SAVE {{ product.discount_percent }}%</span>
+        {% endif %}
+      </div>
+
+      <div class="stock-status mb-3" id="stockStatus">
+        {% if has_initial_stock %}
+          {% if product.track_inventory and initial_stock <= 10 %}
+          <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>Only <span id="stockCount">{{ initial_stock }}</span> left</span>
+          {% else %}
+          <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>In Stock</span>
+          {% endif %}
+        {% else %}
+        <span class="badge bg-secondary"><i class="bi bi-x-circle me-1"></i>Out of Stock</span>
         {% endif %}
       </div>
 
       {% if product.short_description %}
-      <p class="product-short-desc mb-4">{{ product.short_description }}</p>
+      <p class="product-short-desc">{{ product.short_description }}</p>
       {% endif %}
 
-      <!-- Color Swatches -->
       {% if has_variants %}
-      <div class="variant-swatches mb-4" id="variantSwatches" role="radiogroup" aria-label="Choose color">
-        <p class="variant-label small mb-2">
-          <span class="fw-700">Color:</span>
-          <span id="selectedColorName">{{ default_variant.color_name if default_variant else '' }}</span>
-        </p>
+      <div class="variant-swatches mb-3" id="variantSwatches" role="radiogroup" aria-label="Choose color">
+        <p class="variant-label mb-2">Color: <span id="selectedColorName">{{ default_variant.color_name if default_variant else '' }}</span></p>
         <div class="d-flex flex-wrap gap-2">
           {% for v in active_variants %}
           <button type="button"
@@ -125,31 +121,17 @@
       </div>
       {% endif %}
 
-      <!-- Stock Status -->
-      <div class="stock-status mb-4" id="stockStatus">
-        {% if has_initial_stock %}
-          {% if product.track_inventory and initial_stock <= 10 %}
-          <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>Only <span id="stockCount">{{ initial_stock }}</span> left</span>
-          {% else %}
-          <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>In Stock</span>
-          {% endif %}
-        {% else %}
-        <span class="badge bg-secondary"><i class="bi bi-x-circle me-1"></i>Out of Stock</span>
-        {% endif %}
-      </div>
-
-      <!-- Add to Cart -->
       <div class="add-to-cart-section" id="addToCartSection">
         <input type="hidden" id="selectedVariantId" value="{{ default_variant.id if default_variant else 0 }}" />
-        <div class="d-flex gap-3 align-items-center mb-3">
+        <div class="buyrow">
           <div class="quantity-selector">
-            <button class="qty-btn qty-minus" type="button"><i class="bi bi-dash"></i></button>
+            <button class="qty-btn qty-minus" type="button" aria-label="Decrease quantity"><i class="bi bi-dash"></i></button>
             <input type="number" class="qty-input" id="productQty" value="1" min="1"
                    max="{{ initial_stock if product.track_inventory else 99 }}"
-                   inputmode="numeric" />
-            <button class="qty-btn qty-plus" type="button"><i class="bi bi-plus"></i></button>
+                   inputmode="numeric" aria-label="Quantity" />
+            <button class="qty-btn qty-plus" type="button" aria-label="Increase quantity"><i class="bi bi-plus"></i></button>
           </div>
-          <button class="btn btn-primary btn-lg flex-grow-1 add-to-cart-btn"
+          <button class="btn btn-primary btn-lg add-to-cart-btn"
                   data-product-id="{{ product.id }}"
                   data-qty-input="productQty"
                   id="addToCartBtn"
@@ -159,47 +141,19 @@
         </div>
       </div>
 
-      <hr class="my-4" />
-
-      <!-- Meta -->
-      <div class="product-meta text-muted small">
-        {% if product.weight %}
-        <p class="mb-1"><i class="bi bi-box me-2"></i>Weight: {{ product.weight }} lbs</p>
-        {% endif %}
-        {% if product.category %}
-        <p class="mb-1"><i class="bi bi-tag me-2"></i>Category: <a href="{{ url_for('shop.shop_category', category_slug=product.category.slug) }}">{{ product.category.name }}</a></p>
-        {% endif %}
+      <div class="facts">
+        <div><span>Pickup</span><span>Ready at {{ store.address_short }} in {{ store.pickup_time }} · Free</span></div>
+        <div><span>Delivery</span><span>Free local delivery on orders over ${{ store.free_delivery_over }}</span></div>
+        {% if product.weight %}<div><span>Weight</span><span>{{ product.weight }} lbs</span></div>{% endif %}
+        {% if product.upc %}<div><span>UPC</span><span class="mono">{{ product.upc }}</span></div>{% endif %}
       </div>
 
-      <!-- Tabs -->
-      <div class="product-tabs mt-4">
-        <ul class="nav nav-tabs" id="productTabs">
-          <li class="nav-item">
-            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabDescription">Description</button>
-          </li>
-          <li class="nav-item">
-            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabShipping">Shipping Info</button>
-          </li>
-        </ul>
-        <div class="tab-content p-3 border border-top-0 rounded-bottom">
-          <div class="tab-pane fade show active" id="tabDescription">
-            {% if product.description %}
-            <div class="product-description">{{ product.description|safe }}</div>
-            {% else %}
-            <p class="text-muted">No description available.</p>
-            {% endif %}
-          </div>
-          <div class="tab-pane fade" id="tabShipping">
-            <ul class="list-unstyled mb-0">
-              <li class="mb-2"><i class="bi bi-truck text-primary me-2"></i>Standard shipping: 3–5 business days</li>
-              <li class="mb-2"><i class="bi bi-lightning text-primary me-2"></i>Express shipping: 1–2 business days</li>
-              <li class="mb-2"><i class="bi bi-gift text-primary me-2"></i>Free shipping on orders over $50</li>
-              <li><i class="bi bi-arrow-counterclockwise text-primary me-2"></i>30-day hassle-free returns</li>
-            </ul>
-          </div>
-        </div>
+      {% if product.description %}
+      <div class="mt-4">
+        <span class="lbl text-muted d-block mb-2">About this item</span>
+        <div class="product-description">{{ product.description|safe }}</div>
       </div>
-
+      {% endif %}
     </div>
   </div>
 
@@ -221,19 +175,13 @@
     </div>
   </div>
 
-  <!-- Related Products -->
   {% if related %}
-  <div class="mt-5 pt-4">
-    <h3 class="section-title mb-4">You May Also Like</h3>
-    <div class="row g-3">
-      {% for rp in related %}
-      <div class="col-6 col-md-3">
-        {% set product = rp %}
-        {% include '_product_card.html' %}
-      </div>
-      {% endfor %}
+  <section class="pb-5">
+    <div class="sechead"><h2>Pairs well with</h2></div>
+    <div class="pgrid">
+      {% for rp in related %}{% with product = rp %}{% include '_product_card.html' %}{% endwith %}{% endfor %}
     </div>
-  </div>
+  </section>
   {% endif %}
 </div>
 {% endblock %}

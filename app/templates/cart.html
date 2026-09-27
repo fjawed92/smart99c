@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-header-bar">
   <div class="container">
-    <h1 class="page-title">Shopping Cart</h1>
+    <h1 class="page-title">Your cart</h1>
   </div>
 </div>
 
@@ -37,7 +37,7 @@
                       <img src="{{ thumb }}" alt="{{ item.product.name }}"
                            class="cart-item-thumb" />
                       {% else %}
-                      <div class="cart-item-thumb-placeholder"><i class="bi bi-image"></i></div>
+                      <div class="cart-item-thumb-placeholder">{{ product_art(item.product) }}</div>
                       {% endif %}
                     </a>
                     <div>
