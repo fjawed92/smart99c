@@ -55,9 +55,10 @@ document.addEventListener('keydown', e => {
 // ── Cart Count Badge ─────────────────────────────────────────
 
 function updateCartBadges(count) {
-  document.querySelectorAll('#cartBadge, #cartBadgeDesktop').forEach(badge => {
+  document.querySelectorAll('#cartBadge, #cartBadgeDesktop, #cartBadgeMobile').forEach(badge => {
     badge.textContent = count;
     if (badge.id === 'cartBadgeDesktop') badge.style.display = 'inline-flex';
+    if (badge.id === 'cartBadgeMobile') badge.hidden = !Number(count);
   });
 }
 
@@ -113,7 +114,10 @@ document.addEventListener('click', function (e) {
 
   // Visual feedback
   const original = btn.innerHTML;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Adding…';
+  // Compact card buttons (icon + short label) only have room for the spinner
+  btn.innerHTML = btn.querySelector('.add-lbl')
+    ? '<span class="spinner-border spinner-border-sm" role="status" aria-label="Adding"></span>'
+    : '<span class="spinner-border spinner-border-sm me-1"></span>Adding…';
   btn.disabled = true;
 
   addToCart(productId, quantity, variantId).finally(() => {

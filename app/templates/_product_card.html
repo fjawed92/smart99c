@@ -41,9 +41,9 @@
       {% if not product.in_stock %}
       <span class="oos">Sold out</span>
       {% elif product.has_variants %}
-      <a href="{{ p_url }}" class="add-btn">Choose color</a>
+      <a href="{{ p_url }}" class="add-btn add-btn-wide">Choose color</a>
       {% else %}
-      <button class="add-btn add-to-cart-btn" data-product-id="{{ product.id }}" aria-label="Add {{ product.name }} to cart">+ Add</button>
+      <button class="add-btn add-to-cart-btn" data-product-id="{{ product.id }}" aria-label="Add {{ product.name }} to cart"><i class="bi bi-plus-lg" aria-hidden="true"></i><span class="add-lbl">Add</span></button>
       {% endif %}
     </div>
   </div>

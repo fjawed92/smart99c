@@ -209,7 +209,7 @@ async function initStripe(shippingRateId) {
   if (elements) elements.destroy?.();
   elements = stripe.elements({clientSecret: data.client_secret, appearance: {
     theme: 'stripe',
-    variables: {colorPrimary: '#E8334A', fontFamily: 'Nunito, sans-serif', borderRadius: '8px'}
+    variables: {colorPrimary: '#2E6E6E', fontFamily: 'Nunito, sans-serif', borderRadius: '8px'}
   }});
   paymentElement = elements.create('payment');
   paymentElement.mount('#payment-element');

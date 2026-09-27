@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-{% macro cat_tile(cat, cls, label, tint='#E8334A', art_width=None) -%}
+{% macro cat_tile(cat, cls, label, tint='#E8483F', art_width=None) -%}
   <a href="{{ url_for('shop.shop_category', category_slug=cat.slug) }}" class="tile {{ cls }}">
     <span class="lbl">{{ label }}</span>
     <h3>{{ cat.name }}</h3>
@@ -13,9 +13,9 @@
 
 <section class="container hero">
   <div class="hero-top">
-    <h1>Game night <span class="r">starts</span> <span class="u">here.</span></h1>
+    <h1>Game night <span class="scr">starts here</span></h1>
     <div class="hside">
-      <span class="lbl" style="color:var(--red)">Smart 99¢ Plus · West Babylon, NY</span>
+      <span class="lbl" style="color:var(--teal)">Smart 99¢ Plus · West Babylon, NY</span>
       <p>Toys, board games and Pokémon cards from your neighborhood store. Order online, pick up today.</p>
       <div class="cta">
         {% if lead_category %}
@@ -37,31 +37,37 @@
           <span data-u="d">--<small>DAYS</small></span><span data-u="h">--<small>HRS</small></span><span data-u="m">--<small>MIN</small></span>
         </div>
       </div>
-      <div class="art">{% if lead_category.image_url %}<img src="{{ lead_category.image_url }}" alt="" />{% else %}{{ art_svg('box', '#E8334A') }}{% endif %}</div>
+      <div class="art">{% if lead_category.image_url %}<img src="{{ lead_category.image_url }}" alt="" />{% else %}{{ art_svg('pack', '#FFC93C') }}{% endif %}</div>
     </a>
     {% else %}
-    <a href="{{ url_for('shop.shop') }}" class="tile t1"><span class="lbl">New every week</span><h3>Toys, games &amp; cards</h3><div class="art">{{ art_svg('box', '#E8334A') }}</div></a>
+    <a href="{{ url_for('shop.shop') }}" class="tile t1"><span class="lbl">New every week</span><h3>Toys, games &amp; cards</h3><div class="art">{{ art_svg('box', '#FFC93C') }}</div></a>
     {% endif %}
 
-    {% if other_categories|length > 0 %}{{ cat_tile(other_categories[0], 't2', 'Shop the aisle', '#F5C518', '34%') }}
-    {% else %}<a href="{{ url_for('shop.shop') }}" class="tile t2"><span class="lbl">Family night</span><h3>Board games</h3><div class="art" style="width:34%">{{ art_svg('game', '#F5C518') }}</div></a>{% endif %}
+    {% if other_categories|length > 0 %}{{ cat_tile(other_categories[0], 't2', 'Party time' if 'balloon' in other_categories[0].name|lower else 'Shop the aisle', '#FFC93C', '34%') }}
+    {% else %}<a href="{{ url_for('shop.shop') }}" class="tile t2"><span class="lbl">Party time</span><h3>Balloons</h3><div class="art" style="width:34%">{{ art_svg('balloon', '#FFC93C') }}</div></a>{% endif %}
 
     <a href="{{ url_for('shop.shop_category', category_slug=lead_category.slug) if lead_category else url_for('shop.shop') }}" class="tile t3">
       <span class="lbl">{{ 'Packs & boxes' if lead_category else 'Everyday prices' }}</span>
-      <div><span class="lbl">From</span><div class="big">${{ "%.2f"|format(from_price or 0.99) }}</div></div>
-      <div class="art" style="width:36%">{{ art_svg('pack', '#E8334A') }}</div>
+      {% set fp = from_price or 0.99 %}
+      <div><span class="lbl">From</span><div class="big gold-num">{% if fp < 1 %}{{ (fp * 100)|round|int }}¢{% else %}${{ "%.2f"|format(fp) }}{% endif %}</div></div>
+      <div class="art" style="width:36%">{{ art_svg('pack', '#E8483F') }}</div>
     </a>
 
     <div class="tile t4"><div><b>1 HR</b><span class="lbl">Store pickup</span></div></div>
 
-    {% if other_categories|length > 1 %}{{ cat_tile(other_categories[1], 't5', 'Just in', '#E8334A', '40%') }}
-    {% else %}<a href="{{ url_for('shop.shop') }}" class="tile t5"><span class="lbl">Soft &amp; squishy</span><h3>Plush</h3><div class="art" style="width:40%">{{ art_svg('plush', '#E8334A') }}</div></a>{% endif %}
+    {% if other_categories|length > 1 %}{{ cat_tile(other_categories[1], 't5', 'Just in', '#F0668E', '40%') }}
+    {% else %}<a href="{{ url_for('shop.shop') }}" class="tile t5"><span class="lbl">Soft &amp; squishy</span><h3>Plush</h3><div class="art" style="width:40%">{{ art_svg('plush', '#F0668E') }}</div></a>{% endif %}
 
-    {% if other_categories|length > 2 %}{{ cat_tile(other_categories[2], 't6', 'Collect them all', '#E8334A', '38%') }}
-    {% else %}<a href="{{ url_for('shop.shop') }}" class="tile t6"><span class="lbl">Collect the squad</span><h3>Figures</h3><div class="art" style="width:38%">{{ art_svg('figure', '#E8334A') }}</div></a>{% endif %}
+    {% if other_categories|length > 2 %}{{ cat_tile(other_categories[2], 't6', 'Collect them all', '#E8483F', '38%') }}
+    {% else %}<a href="{{ url_for('shop.shop') }}" class="tile t6"><span class="lbl">Collect the squad</span><h3>Figures</h3><div class="art" style="width:38%">{{ art_svg('figure', '#E8483F') }}</div></a>{% endif %}
 
-    {% if other_categories|length > 3 %}{{ cat_tile(other_categories[3], 't7', 'Top sellers', '#F5C518', '36%') }}
-    {% else %}<a href="{{ url_for('shop.shop') }}" class="tile t7"><span class="lbl">Protect your pulls</span><h3>Sleeves &amp; storage</h3><div class="art" style="width:36%">{{ art_svg('sleeve', '#F5C518') }}</div></a>{% endif %}
+    {% if other_categories|length > 3 %}{{ cat_tile(other_categories[3], 't7', 'Top sellers', '#FFC93C', '36%') }}
+    {% else %}<a href="{{ url_for('shop.shop') }}" class="tile t7"><span class="lbl">Protect your pulls</span><h3>Sleeves &amp; storage</h3><div class="art" style="width:36%">{{ art_svg('sleeve', '#FFC93C') }}</div></a>{% endif %}
+  </div>
+
+  <div class="shopby">
+    <h2>Shop by <span class="scr">price</span></h2>
+    {% with pc_endpoint='shop.shop', pc_args={}, pc_active=None, pc_deals=False %}{% include '_price_chips.html' %}{% endwith %}
   </div>
 </section>
 
@@ -75,7 +81,7 @@
 {% endif %}
 
 <section class="section-padded" style="padding-top:{{ '0' if featured_products else '56px' }}"><div class="container">
-  <div class="sechead"><h2>Order online, <span style="color:var(--red)">pick up today</span></h2></div>
+  <div class="sechead"><h2>Order online, <span class="scr">pick up today</span></h2></div>
   <div class="steps" id="pickup">
     <div class="step"><div class="k">1</div><h3>Shop online</h3><p>Add toys, games and cards to your cart any time, day or night.</p></div>
     <div class="step"><div class="k">2</div><h3>We pack it</h3><p>Your order is ready at the counter in {{ store.pickup_time }}.</p></div>
@@ -99,7 +105,7 @@
 {% endif %}
 
 <section class="visit"><div class="container">
-  <h2>Come play <span class="y">in person.</span></h2>
+  <h2>Come play <span class="scr">in person</span></h2>
   <dl>
     <dt>Address</dt><dd>{{ store.address }}</dd>
     <dt>Phone</dt><dd><a href="tel:{{ store.phone_href }}" class="mono">{{ store.phone }}</a></dd>

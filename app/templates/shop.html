@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{% if current_category %}{{ current_category.name }}{% elif search %}Search: {{ search }}{% else %}Shop all{% endif %} · Smart 99¢ Plus{% endblock %}
+{% block title %}{% if current_category %}{{ current_category.name }}{% elif deals %}Deals{% elif search %}Search: {{ search }}{% else %}Shop all{% endif %} · Smart 99¢ Plus{% endblock %}
 
 {% block content %}
 {% set cat_args = {'category_slug': current_category.slug} if current_category else {} %}
@@ -14,7 +14,7 @@
           {% if current_category %}<li class="breadcrumb-item active">{{ current_category.name }}</li>{% endif %}
         </ol>
       </nav>
-      <h1>{% if current_category %}{{ current_category.name }}{% elif search %}“{{ search }}”{% else %}All toys &amp; games{% endif %}</h1>
+      <h1>{% if current_category %}{{ current_category.name }}{% elif deals %}Deals <span class="scr">on sale now</span>{% elif search %}“{{ search }}”{% else %}All toys &amp; games{% endif %}</h1>
       {% if current_category and current_category.description %}<p class="mb-0 mt-2 text-muted" style="max-width:60ch">{{ current_category.description }}</p>{% endif %}
     </div>
     <div class="sortbar">
@@ -29,6 +29,10 @@
     </div>
   </div>
 
+  {% with pc_endpoint=request.endpoint, pc_args=dict(cat_args, q=search or None, sort=sort if sort != 'newest' else None), pc_active=max_price, pc_deals=deals %}
+  <div class="shop-pricebar">{% include '_price_chips.html' %}</div>
+  {% endwith %}
+
   <div class="shop-layout">
     <aside class="filters">
       <form method="GET" action="{{ url_for(request.endpoint, **cat_args) }}">
@@ -38,6 +42,7 @@
           <button class="btn btn-ink" type="submit" aria-label="Search"><i class="bi bi-search"></i></button>
         </div>
         <input type="hidden" name="sort" value="{{ sort }}" />
+        {% if deals %}<input type="hidden" name="deals" value="1" />{% endif %}
         <div class="mt-4">
           <span class="lbl">Price</span>
           <div class="pricebox-f">
@@ -69,17 +74,17 @@
       <nav class="mt-5" aria-label="Product pages">
         <ul class="pagination justify-content-center flex-wrap">
           {% if pagination.has_prev %}
-          <li class="page-item"><a class="page-link" aria-label="Previous page" href="{{ url_for(request.endpoint, page=pagination.prev_num, q=search, sort=sort, min_price=min_price, max_price=max_price, **cat_args) }}"><i class="bi bi-chevron-left"></i></a></li>
+          <li class="page-item"><a class="page-link" aria-label="Previous page" href="{{ url_for(request.endpoint, page=pagination.prev_num, q=search, sort=sort, min_price=min_price, max_price=max_price, deals=1 if deals else None, **cat_args) }}"><i class="bi bi-chevron-left"></i></a></li>
           {% endif %}
           {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
             {% if p %}
-            <li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" href="{{ url_for(request.endpoint, page=p, q=search, sort=sort, min_price=min_price, max_price=max_price, **cat_args) }}">{{ p }}</a></li>
+            <li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" href="{{ url_for(request.endpoint, page=p, q=search, sort=sort, min_price=min_price, max_price=max_price, deals=1 if deals else None, **cat_args) }}">{{ p }}</a></li>
             {% else %}
             <li class="page-item disabled"><span class="page-link">…</span></li>
             {% endif %}
           {% endfor %}
           {% if pagination.has_next %}
-          <li class="page-item"><a class="page-link" aria-label="Next page" href="{{ url_for(request.endpoint, page=pagination.next_num, q=search, sort=sort, min_price=min_price, max_price=max_price, **cat_args) }}"><i class="bi bi-chevron-right"></i></a></li>
+          <li class="page-item"><a class="page-link" aria-label="Next page" href="{{ url_for(request.endpoint, page=pagination.next_num, q=search, sort=sort, min_price=min_price, max_price=max_price, deals=1 if deals else None, **cat_args) }}"><i class="bi bi-chevron-right"></i></a></li>
           {% endif %}
         </ul>
       </nav>
