@@ -479,7 +479,8 @@ def products_export():
 @admin_bp.route('/products/import', methods=['POST'])
 @admin_required
 def products_import_upload():
-    from app.services.product_import import import_workbook
+    """Step 1: read the file and show an editable preview. Nothing is saved yet."""
+    from app.services.product_import import parse_workbook, preview_rows
 
     file = request.files.get('file')
     if not file or not file.filename:
@@ -487,10 +488,47 @@ def products_import_upload():
         return redirect(url_for('admin.products_import'))
 
     if not file.filename.lower().endswith('.xlsx'):
-        flash('Only .xlsx files are supported.', 'error')
+        flash('Only .xlsx files are supported. In Excel use File → Save As → Excel Workbook (.xlsx).', 'error')
         return redirect(url_for('admin.products_import'))
 
-    result = import_workbook(file)
+    rows, errors = parse_workbook(file.read())
+    if not rows:
+        for _, msg in errors or [(0, 'No product rows found in that file.')]:
+            flash(msg, 'error')
+        return redirect(url_for('admin.products_import'))
+
+    categories = Category.query.order_by(Category.sort_order, Category.name).all()
+    return render_template('admin/products_import_preview.html',
+                           rows=preview_rows(rows), file_errors=errors,
+                           filename=file.filename, categories=categories)
+
+
+@admin_bp.route('/products/import/confirm', methods=['POST'])
+@admin_required
+def products_import_confirm():
+    """Step 2: save the (possibly edited) preview rows."""
+    import json
+    from app.services.product_import import apply_rows, ALL_COLUMNS
+
+    try:
+        raw = json.loads(request.form.get('rows_json') or '[]')
+    except ValueError:
+        raw = None
+    if not isinstance(raw, list):
+        flash('The preview could not be read. Please upload the file again.', 'error')
+        return redirect(url_for('admin.products_import'))
+
+    rows = []
+    for item in raw:
+        if not isinstance(item, dict) or item.get('_skip'):
+            continue
+        row = {'_row': item.get('_row')}
+        for col in ALL_COLUMNS:
+            val = item.get(col)
+            row[col] = None if val is None or str(val).strip() == '' else str(val).strip()
+        rows.append(row)
+
+    result = apply_rows(rows)
     return render_template('admin/products_import_result.html', result=result)
 
 
