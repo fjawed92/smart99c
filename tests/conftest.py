@@ -67,3 +67,17 @@ def variant_product(db):
     db.session.add_all([red, blue, green])
     db.session.commit()
     return p, red, blue, green
+
+
+@pytest.fixture
+def admin_client(app, db):
+    from app.models import User
+    admin = User(email='admin@test.com', first_name='A', last_name='D', is_admin=True, is_active=True)
+    admin.set_password('pw-123456')
+    db.session.add(admin)
+    db.session.commit()
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess['_user_id'] = str(admin.id)
+        sess['_fresh'] = True
+    return client

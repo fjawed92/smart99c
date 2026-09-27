@@ -1,31 +1,26 @@
-<div class="product-card">
+{% set p_url = url_for('shop.product_detail', slug=product.slug) %}
+<article class="product-card">
   {% if product.is_on_sale %}
-  <span class="product-badge badge-sale">SALE</span>
+  <span class="product-badge badge-sale">Save {{ product.discount_percent }}%</span>
+  {% elif not product.in_stock %}
+  <span class="product-badge">Sold out</span>
   {% elif product.is_featured %}
-  <span class="product-badge badge-featured">Featured</span>
+  <span class="product-badge">Staff pick</span>
   {% endif %}
-  <a href="{{ url_for('shop.product_detail', slug=product.slug) }}" class="product-image-link">
+  <a href="{{ p_url }}" class="product-image-link" tabindex="-1" aria-hidden="true">
     <div class="product-image-wrapper">
       {% if product.primary_image_url %}
-      <img src="{{ product.primary_image_url }}" alt="{{ product.name }}" class="product-img" loading="lazy" />
+      <img src="{{ product.primary_image_url }}" alt="" class="product-img" loading="lazy" />
       {% else %}
-      <div class="product-img-placeholder"><i class="bi bi-image"></i></div>
+      {{ product_art(product) }}
       {% endif %}
     </div>
   </a>
   <div class="product-body">
     {% if product.category %}
-    <span class="product-category-tag">{{ product.category.name }}</span>
+    <a class="product-category-tag" href="{{ url_for('shop.shop_category', category_slug=product.category.slug) }}">{{ product.category.name }}</a>
     {% endif %}
-    <h3 class="product-name">
-      <a href="{{ url_for('shop.product_detail', slug=product.slug) }}">{{ product.name }}</a>
-    </h3>
-    <div class="product-pricing">
-      <span class="product-price">${{ "%.2f"|format(product.price) }}</span>
-      {% if product.is_on_sale %}
-      <span class="product-compare-price">${{ "%.2f"|format(product.compare_price) }}</span>
-      {% endif %}
-    </div>
+    <h3 class="product-name"><a href="{{ p_url }}">{{ product.name }}</a></h3>
     {% if product.has_variants %}
     <div class="product-card-swatches" aria-label="Available colors">
       {% for v in product.active_variants[:5] %}
@@ -38,25 +33,18 @@
       {% endif %}
     </div>
     {% endif %}
-    {% if not product.in_stock %}
-    <p class="text-muted small mb-2">Out of Stock</p>
-    {% endif %}
-    {% if product.has_variants %}
-    <a href="{{ url_for('shop.product_detail', slug=product.slug) }}"
-       class="btn btn-add-to-cart w-100 mt-2{% if not product.in_stock %} disabled{% endif %}">
-      <i class="bi bi-eye me-1"></i> Choose Color
-    </a>
-    {% else %}
-    <button
-      class="btn btn-add-to-cart add-to-cart-btn w-100 mt-2"
-      data-product-id="{{ product.id }}"
-      {% if not product.in_stock %}disabled{% endif %}>
-      {% if product.in_stock %}
-      <i class="bi bi-bag-plus me-1"></i> Add to Cart
+    <div class="product-row">
+      <div class="product-pricing">
+        <span class="product-price">${{ "%.2f"|format(product.price) }}</span>
+        {% if product.is_on_sale %}<span class="product-compare-price">${{ "%.2f"|format(product.compare_price) }}</span>{% endif %}
+      </div>
+      {% if not product.in_stock %}
+      <span class="oos">Sold out</span>
+      {% elif product.has_variants %}
+      <a href="{{ p_url }}" class="add-btn">Choose color</a>
       {% else %}
-      Out of Stock
+      <button class="add-btn add-to-cart-btn" data-product-id="{{ product.id }}" aria-label="Add {{ product.name }} to cart">+ Add</button>
       {% endif %}
-    </button>
-    {% endif %}
+    </div>
   </div>
-</div>
+</article>

@@ -1,57 +1,67 @@
 {% extends "admin/base_admin.html" %}
-{% block title %}Bulk Import — Products{% endblock %}
-{% block page_title %}Bulk Import / Export{% endblock %}
+{% block title %}Excel import — Products{% endblock %}
+{% block page_title %}Excel import{% endblock %}
 
 {% block content %}
 <div class="row g-4">
-  <div class="col-lg-7">
-    <div class="card border-0 shadow-sm mb-4">
-      <div class="card-body">
-        <h6 class="fw-700 mb-3"><i class="bi bi-upload me-2"></i>Import Products from Excel</h6>
-        <p class="text-muted small">
-          Upload an .xlsx file matching the template. Each row is either a product or a color variant.
-          Existing products are updated by <code>product_slug</code> (or <code>product_name</code>);
-          new products are created when not found. Blank cells leave existing values unchanged.
-        </p>
-        <form method="POST" enctype="multipart/form-data" action="{{ url_for('admin.products_import_upload') }}">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-          <div class="mb-3">
-            <label class="form-label fw-700">Choose file (.xlsx)</label>
-            <input type="file" name="file" accept=".xlsx" class="form-control" required />
-          </div>
-          <button type="submit" class="btn btn-primary">
-            <i class="bi bi-cloud-arrow-up me-2"></i>Upload & Process
-          </button>
-        </form>
-      </div>
-    </div>
+  <div class="col-lg-8">
+    <form method="POST" enctype="multipart/form-data" action="{{ url_for('admin.products_import_upload') }}" id="importForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <label class="drop d-block" id="dropZone" for="fileInput">
+        <i class="bi bi-file-earmark-spreadsheet" style="font-size:40px"></i>
+        <h3>Drop your Excel file here</h3>
+        <p class="text-muted mb-3">You'll see a preview you can edit. Nothing is saved until you click <strong>Import</strong>.</p>
+        <span class="btn btn-primary">Choose file</span>
+        <input type="file" name="file" id="fileInput" accept=".xlsx" class="visually-hidden" required />
+        <div class="lbl mt-3" id="fileName"></div>
+      </label>
+    </form>
   </div>
 
-  <div class="col-lg-5">
-    <div class="card border-0 shadow-sm mb-4">
+  <div class="col-lg-4">
+    <div class="card mb-4">
       <div class="card-body">
-        <h6 class="fw-700 mb-3"><i class="bi bi-download me-2"></i>Templates & Export</h6>
+        <h6 class="mb-3">Templates &amp; export</h6>
         <div class="d-grid gap-2">
-          <a href="{{ url_for('admin.products_import_template') }}" class="btn btn-outline-primary">
-            <i class="bi bi-file-earmark-spreadsheet me-2"></i>Download Blank Template
-          </a>
-          <a href="{{ url_for('admin.products_export') }}" class="btn btn-outline-secondary">
-            <i class="bi bi-cloud-arrow-down me-2"></i>Download Current Catalog
-          </a>
+          <a href="{{ url_for('admin.products_import_template') }}" class="btn"><i class="bi bi-file-earmark-arrow-down me-2"></i>Download blank template</a>
+          <a href="{{ url_for('admin.products_export') }}" class="btn"><i class="bi bi-cloud-arrow-down me-2"></i>Download current catalog</a>
         </div>
-        <hr />
-        <h6 class="small fw-700 text-muted mb-2">Column reference</h6>
-        <ul class="small text-muted mb-0 ps-3" style="line-height:1.7;">
-          <li><strong>product_slug</strong>: lookup key (auto-generated if empty for new products)</li>
-          <li><strong>product_name</strong>: required for new products</li>
-          <li><strong>price</strong>: required for new products; blank leaves unchanged on update</li>
-          <li><strong>color_name</strong>: if present, the row defines a variant on the product</li>
-          <li><strong>variant_sku</strong>: lookup key for existing variants on the product</li>
-          <li><strong>stock_quantity</strong>: used when there's no color; otherwise use <strong>variant_stock_quantity</strong></li>
-          <li>Booleans: TRUE/FALSE, 1/0, yes/no all accepted</li>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body small">
+        <h6 class="mb-2">What your sheet needs</h6>
+        <p class="mb-2">A simple sheet works. The first row should be headings like:</p>
+        <p class="mono mb-2">Name · Category · Price · Stock · SKU · UPC · Cost</p>
+        <ul class="text-muted ps-3 mb-0" style="line-height:1.7">
+          <li>New products need a <strong>Name</strong> and <strong>Price</strong>.</li>
+          <li>Products already on the site are matched by name and updated.</li>
+          <li>Blank cells leave existing values as they are.</li>
+          <li>New category names are created for you.</li>
+          <li>For colors, use the full template (color_name column).</li>
         </ul>
       </div>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  const zone = document.getElementById('dropZone'), input = document.getElementById('fileInput'), form = document.getElementById('importForm');
+  const label = document.getElementById('fileName');
+  function send(files) {
+    if (!files || !files.length) return;
+    if (!/\.xlsx$/i.test(files[0].name)) { label.textContent = 'Please use an .xlsx file'; return; }
+    const dt = new DataTransfer(); dt.items.add(files[0]); input.files = dt.files;
+    label.textContent = 'Reading ' + files[0].name + '…';
+    form.submit();
+  }
+  ['dragenter', 'dragover'].forEach(ev => zone.addEventListener(ev, e => { e.preventDefault(); zone.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => zone.addEventListener(ev, e => { e.preventDefault(); zone.classList.remove('over'); }));
+  zone.addEventListener('drop', e => send(e.dataTransfer.files));
+  input.addEventListener('change', () => send(input.files));
+})();
+</script>
 {% endblock %}

@@ -1,0 +1,124 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}Review import — Products{% endblock %}
+{% block page_title %}Review import{% endblock %}
+
+{% block content %}
+{% set n_new = rows|selectattr('_status', 'equalto', 'new')|list|length %}
+{% set n_upd = rows|selectattr('_status', 'equalto', 'update')|list|length %}
+{% set n_err = rows|selectattr('_status', 'equalto', 'error')|list|length %}
+<div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-3">
+  <div>
+    <div class="lbl text-muted">{{ filename }}</div>
+    <div class="fw-700 mt-1" id="summary">{{ n_new }} new · {{ n_upd }} updates · {{ n_err }} need attention</div>
+  </div>
+  <a href="{{ url_for('admin.products_import') }}" class="btn btn-sm"><i class="bi bi-arrow-left me-1"></i>Choose a different file</a>
+</div>
+
+{% for rn, msg in file_errors %}<div class="alert alert-warning">{{ msg }}</div>{% endfor %}
+
+<p class="text-muted small">Edit any cell below, untick rows you don't want, then click <strong>Import</strong>. Rows marked <span class="row-pill error">Fix</span> are skipped until they're fixed.</p>
+
+<datalist id="catList">{% for c in categories %}<option value="{{ c.name }}"></option>{% endfor %}</datalist>
+
+<div class="card"><div class="table-responsive">
+  <table class="table edit-table align-middle" id="previewTable">
+    <thead><tr>
+      <th style="width:34px"><input type="checkbox" class="form-check-input" id="allRows" checked aria-label="Select all rows"></th>
+      <th>Status</th><th>Name</th><th>Category</th><th>Price</th><th>Compare at</th><th>Stock</th><th>SKU</th><th>UPC</th>
+    </tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr data-i="{{ loop.index0 }}" data-existing="{{ '1' if r._product_id else '' }}" class="{{ 'is-error' if r._status == 'error' }}">
+        <td><input type="checkbox" class="form-check-input row-on" checked aria-label="Include row {{ r._row }}"></td>
+        <td>
+          <span class="row-pill {{ r._status }}">{{ {'new': 'New', 'update': 'Update', 'error': 'Fix'}[r._status] }}</span>
+          <div class="src">Row {{ r._row }}{% if r._new_category %} · new category{% endif %}</div>
+          {% if r._message %}<div class="small text-danger mt-1 msg">{{ r._message }}</div>{% else %}<div class="small text-danger mt-1 msg"></div>{% endif %}
+        </td>
+        <td><input class="form-control" data-f="product_name" value="{{ r.product_name or '' }}" aria-label="Name" style="min-width:220px"></td>
+        <td><input class="form-control" data-f="category_name" value="{{ r.category_name or '' }}" list="catList" aria-label="Category" style="min-width:150px"></td>
+        <td><input class="form-control mono" data-f="price" data-required value="{{ r.price or '' }}" inputmode="decimal" aria-label="Price"></td>
+        <td><input class="form-control mono" data-f="compare_price" value="{{ r.compare_price or '' }}" inputmode="decimal" aria-label="Compare at price"></td>
+        <td><input class="form-control mono" data-f="stock_quantity" value="{{ r.stock_quantity or '' }}" inputmode="numeric" aria-label="Stock"></td>
+        <td><input class="form-control mono" data-f="product_sku" value="{{ r.product_sku or '' }}" aria-label="SKU"></td>
+        <td><input class="form-control mono" data-f="upc" value="{{ r.upc or '' }}" aria-label="UPC"></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+
+<form method="POST" action="{{ url_for('admin.products_import_confirm') }}" id="confirmForm" class="sticky-actions">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+  <input type="hidden" name="rows_json" id="rowsJson" />
+  <button type="submit" class="btn btn-primary" id="confirmBtn">Import</button>
+  <span class="text-muted small" id="confirmHint"></span>
+</form>
+
+<script id="rowsData" type="application/json">{{ rows|tojson }}</script>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  const rows = JSON.parse(document.getElementById('rowsData').textContent);
+  const table = document.getElementById('previewTable');
+  const num = v => v === '' || !isNaN(Number(v));
+
+  function check(tr) {
+    const i = +tr.dataset.i, r = rows[i], msgs = [];
+    const val = f => tr.querySelector(`[data-f="${f}"]`).value.trim();
+    if (!tr.dataset.existing && !val('product_name')) msgs.push('a name is required');
+    if (!tr.dataset.existing && !val('price')) msgs.push('a price is required');
+    ['price', 'compare_price'].forEach(f => { if (!num(val(f))) msgs.push(f.replace('_', ' ') + ' must be a number'); });
+    if (val('stock_quantity') && !/^-?\d+(\.0+)?$/.test(val('stock_quantity'))) msgs.push('stock must be a whole number');
+    // keep server-side problems in columns this page doesn't show
+    const hidden = (r._message || '').split('; ').filter(m => m && !/^(price|compare price|stock quantity):|name is required|price is required/.test(m));
+    const all = msgs.concat(hidden);
+    const pill = tr.querySelector('.row-pill');
+    const status = all.length ? 'error' : (tr.dataset.existing ? 'update' : 'new');
+    pill.className = 'row-pill ' + status;
+    pill.textContent = { new: 'New', update: 'Update', error: 'Fix' }[status];
+    tr.classList.toggle('is-error', !!all.length);
+    tr.querySelector('.msg').textContent = all.join('; ');
+    tr.dataset.status = status;
+  }
+
+  function refresh() {
+    const trs = [...table.tBodies[0].rows];
+    const on = trs.filter(tr => tr.querySelector('.row-on').checked);
+    const c = s => on.filter(tr => tr.dataset.status === s).length;
+    document.getElementById('summary').textContent = `${c('new')} new · ${c('update')} updates · ${c('error')} need attention`;
+    const ok = c('new') + c('update');
+    const btn = document.getElementById('confirmBtn');
+    btn.disabled = !ok;
+    btn.textContent = ok ? `Import ${ok} product${ok === 1 ? '' : 's'}` : 'Nothing to import';
+    document.getElementById('confirmHint').textContent = c('error') ? `${c('error')} row${c('error') === 1 ? '' : 's'} marked Fix will be skipped.` : '';
+  }
+
+  table.addEventListener('input', e => { const tr = e.target.closest('tr[data-i]'); if (tr) { check(tr); refresh(); } });
+  table.addEventListener('change', e => { if (e.target.classList.contains('row-on')) { e.target.closest('tr').classList.toggle('opacity-50', !e.target.checked); refresh(); } });
+  document.getElementById('allRows').addEventListener('change', e => {
+    table.querySelectorAll('.row-on').forEach(cb => { cb.checked = e.target.checked; cb.closest('tr').classList.toggle('opacity-50', !cb.checked); });
+    refresh();
+  });
+
+  document.getElementById('confirmForm').addEventListener('submit', e => {
+    const out = [];
+    [...table.tBodies[0].rows].forEach(tr => {
+      if (!tr.querySelector('.row-on').checked || tr.dataset.status === 'error') return;
+      const r = Object.assign({}, rows[+tr.dataset.i]);
+      tr.querySelectorAll('[data-f]').forEach(inp => { r[inp.dataset.f] = inp.value.trim(); });
+      ['_status', '_message', '_new_category', '_product_id'].forEach(k => delete r[k]);
+      out.push(r);
+    });
+    document.getElementById('rowsJson').value = JSON.stringify(out);
+    document.getElementById('confirmBtn').disabled = true;
+    document.getElementById('confirmBtn').textContent = 'Importing…';
+  });
+
+  [...table.tBodies[0].rows].forEach(check);
+  refresh();
+})();
+</script>
+{% endblock %}

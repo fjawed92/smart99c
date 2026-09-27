@@ -1,83 +1,43 @@
 {% extends "base.html" %}
-{% block title %}Contact Us — Smart 99¢ Plus{% endblock %}
+{% block title %}Contact · Smart 99¢ Plus{% endblock %}
 
 {% block content %}
-<div class="page-header-bar">
-  <div class="container">
-    <h1 class="page-title">Contact Us</h1>
-  </div>
-</div>
+<div class="page-header-bar"><div class="container">
+  <nav aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Home</a></li><li class="breadcrumb-item active">Contact</li></ol></nav>
+  <h1 class="page-title">Say hello.</h1>
+</div></div>
 
-<div class="container py-5">
-  <div class="row g-5">
-    <div class="col-lg-6">
-      <h2 class="section-title mb-4">Get In Touch</h2>
-      <form method="POST" action="{{ url_for('main.contact') }}">
-        {{ form.hidden_tag() }}
-        <div class="mb-3">
-          <label class="form-label">Your Name *</label>
-          {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
-          {% for err in form.name.errors %}
-          <div class="invalid-feedback">{{ err }}</div>
-          {% endfor %}
-        </div>
-        <div class="mb-3">
-          <label class="form-label">Email Address *</label>
-          {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else "")) }}
-          {% for err in form.email.errors %}
-          <div class="invalid-feedback">{{ err }}</div>
-          {% endfor %}
-        </div>
-        <div class="mb-3">
-          <label class="form-label">Subject *</label>
-          {{ form.subject(class="form-control" + (" is-invalid" if form.subject.errors else "")) }}
-          {% for err in form.subject.errors %}
-          <div class="invalid-feedback">{{ err }}</div>
-          {% endfor %}
-        </div>
-        <div class="mb-4">
-          <label class="form-label">Message *</label>
-          {{ form.message(class="form-control" + (" is-invalid" if form.message.errors else ""), rows=5) }}
-          {% for err in form.message.errors %}
-          <div class="invalid-feedback">{{ err }}</div>
-          {% endfor %}
-        </div>
-        <button type="submit" class="btn btn-primary btn-lg">
-          <i class="bi bi-send me-2"></i>Send Message
-        </button>
-      </form>
+<section class="section-padded"><div class="container">
+  <div class="row g-4">
+    <div class="col-lg-7">
+      <div class="panel p-4">
+        <h2 class="mb-4" style="font-size:40px">Send us a message</h2>
+        <form method="POST" action="{{ url_for('main.contact') }}" novalidate>
+          {{ form.hidden_tag() }}
+          <div class="row g-3">
+            {% for field, label, col in [(form.name, 'Your name', 'col-md-6'), (form.email, 'Email', 'col-md-6'), (form.subject, 'Subject', 'col-12')] %}
+            <div class="{{ col }}">
+              {{ field.label(class="form-label", text=label) }}
+              {{ field(class="form-control" + (" is-invalid" if field.errors else "")) }}
+              {% for err in field.errors %}<div class="invalid-feedback">{{ err }}</div>{% endfor %}
+            </div>
+            {% endfor %}
+            <div class="col-12">
+              {{ form.message.label(class="form-label", text="Message") }}
+              {{ form.message(class="form-control" + (" is-invalid" if form.message.errors else ""), rows=5, placeholder="Looking for a specific set or toy? Ask us.") }}
+              {% for err in form.message.errors %}<div class="invalid-feedback">{{ err }}</div>{% endfor %}
+            </div>
+            <div class="col-12"><button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-send me-2"></i>Send message</button></div>
+          </div>
+        </form>
+      </div>
     </div>
-    <div class="col-lg-6">
-      <h2 class="section-title mb-4">Store Information</h2>
-      <div class="contact-info-item">
-        <div class="contact-info-icon"><i class="bi bi-geo-alt-fill"></i></div>
-        <div>
-          <strong>Address</strong>
-          <p class="text-muted mb-0">66 NY-109<br>West Babylon, NY 11704</p>
-        </div>
-      </div>
-      <div class="contact-info-item">
-        <div class="contact-info-icon"><i class="bi bi-telephone-fill"></i></div>
-        <div>
-          <strong>Phone</strong>
-          <p class="text-muted mb-0"><a href="tel:5168518097">516-851-8097</a></p>
-        </div>
-      </div>
-      <div class="contact-info-item">
-        <div class="contact-info-icon"><i class="bi bi-clock-fill"></i></div>
-        <div>
-          <strong>Store Hours</strong>
-          <p class="text-muted mb-0">Mon–Sat: 9:00 AM – 8:00 PM<br>Sunday: 10:00 AM – 6:00 PM</p>
-        </div>
-      </div>
-      <div class="contact-info-item">
-        <div class="contact-info-icon"><i class="bi bi-globe"></i></div>
-        <div>
-          <strong>Website</strong>
-          <p class="text-muted mb-0">Smart99c.com</p>
-        </div>
-      </div>
+    <div class="col-lg-5">
+      <div class="contact-info-item"><span class="contact-info-icon"><i class="bi bi-geo-alt"></i></span><div><span class="lbl text-muted">Address</span><div class="fw-700">{{ store.address }}</div></div></div>
+      <div class="contact-info-item"><span class="contact-info-icon"><i class="bi bi-telephone"></i></span><div><span class="lbl text-muted">Phone</span><div class="fw-700"><a class="mono" href="tel:{{ store.phone_href }}">{{ store.phone }}</a></div></div></div>
+      <div class="contact-info-item"><span class="contact-info-icon"><i class="bi bi-clock"></i></span><div><span class="lbl text-muted">Hours</span>{% for d, h in store.hours %}<div class="fw-700">{{ d }} · {{ h }}</div>{% endfor %}</div></div>
+      <div class="contact-info-item"><span class="contact-info-icon"><i class="bi bi-stars"></i></span><div><span class="lbl text-muted">Pokémon restock</span><div class="fw-700">{{ store.restock_label }}</div></div></div>
     </div>
   </div>
-</div>
+</div></section>
 {% endblock %}

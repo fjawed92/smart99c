@@ -1,1 +1,1 @@
-web: gunicorn run:app
+web: python init_db.py && gunicorn run:app

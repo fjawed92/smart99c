@@ -479,7 +479,8 @@ def products_export():
 @admin_bp.route('/products/import', methods=['POST'])
 @admin_required
 def products_import_upload():
-    from app.services.product_import import import_workbook
+    """Step 1: read the file and show an editable preview. Nothing is saved yet."""
+    from app.services.product_import import parse_workbook, preview_rows
 
     file = request.files.get('file')
     if not file or not file.filename:
@@ -487,11 +488,116 @@ def products_import_upload():
         return redirect(url_for('admin.products_import'))
 
     if not file.filename.lower().endswith('.xlsx'):
-        flash('Only .xlsx files are supported.', 'error')
+        flash('Only .xlsx files are supported. In Excel use File → Save As → Excel Workbook (.xlsx).', 'error')
         return redirect(url_for('admin.products_import'))
 
-    result = import_workbook(file)
+    rows, errors = parse_workbook(file.read())
+    if not rows:
+        for _, msg in errors or [(0, 'No product rows found in that file.')]:
+            flash(msg, 'error')
+        return redirect(url_for('admin.products_import'))
+
+    categories = Category.query.order_by(Category.sort_order, Category.name).all()
+    return render_template('admin/products_import_preview.html',
+                           rows=preview_rows(rows), file_errors=errors,
+                           filename=file.filename, categories=categories)
+
+
+@admin_bp.route('/products/import/confirm', methods=['POST'])
+@admin_required
+def products_import_confirm():
+    """Step 2: save the (possibly edited) preview rows."""
+    import json
+    from app.services.product_import import apply_rows, ALL_COLUMNS
+
+    try:
+        raw = json.loads(request.form.get('rows_json') or '[]')
+    except ValueError:
+        raw = None
+    if not isinstance(raw, list):
+        flash('The preview could not be read. Please upload the file again.', 'error')
+        return redirect(url_for('admin.products_import'))
+
+    rows = []
+    for item in raw:
+        if not isinstance(item, dict) or item.get('_skip'):
+            continue
+        row = {'_row': item.get('_row')}
+        for col in ALL_COLUMNS:
+            val = item.get(col)
+            row[col] = None if val is None or str(val).strip() == '' else str(val).strip()
+        rows.append(row)
+
+    result = apply_rows(rows)
     return render_template('admin/products_import_result.html', result=result)
+
+
+# ─── Pull products from IzyOps ───────────────────────────────────────────────
+
+@admin_bp.route('/izyops', methods=['GET'])
+@admin_required
+def izyops_pull():
+    """Search the IzyOps catalog and preview results before adding them."""
+    from app.services import izyops_client
+    from app.services.izyops_import import on_site_map
+
+    mode = request.args.get('mode', 'keyword')
+    q = request.args.get('q', '').strip()
+    page = request.args.get('page', 1, type=int)
+    connected = izyops_client.is_configured()
+
+    facets, facets_error = ({}, None)
+    if connected:
+        facets, facets_error = izyops_client.get_facets()
+        facets = facets or {}
+
+    items, meta, error = [], {}, None
+    searched = 'q' in request.args
+    if connected and searched:
+        items, meta, error = izyops_client.search_products(mode, q, page)
+        on_site = on_site_map(items)
+        for it in items:
+            site = on_site.get(it['product_id'])
+            it['site_product'] = {'id': site.id, 'name': site.name, 'price': float(site.price),
+                                  'category': site.category.name if site.category else ''} if site else None
+            it['tidy_name'] = site.name if site else izyops_client.tidy_name(it.get('product_name'))
+
+    categories = Category.query.order_by(Category.sort_order, Category.name).all()
+    return render_template('admin/izyops_pull.html',
+                           connected=connected, store=izyops_client.settings()['store'],
+                           facets=facets, facets_error=facets_error,
+                           mode=mode, q=q, page=page, items=items, meta=meta, error=error,
+                           searched=searched, categories=categories)
+
+
+@admin_bp.route('/izyops/add', methods=['POST'])
+@admin_required
+def izyops_add():
+    import json
+    from app.services.izyops_import import save_items
+
+    try:
+        items = json.loads(request.form.get('items_json') or '[]')
+    except ValueError:
+        items = None
+    back = request.form.get('back') or url_for('admin.izyops_pull')
+    if not back.startswith('/admin/izyops') or '\\' in back:
+        back = url_for('admin.izyops_pull')
+    if not isinstance(items, list) or not items:
+        flash('Select at least one product to add.', 'warning')
+        return redirect(back)
+
+    result = save_items([i for i in items if isinstance(i, dict)])
+    parts = []
+    if result['created']:
+        parts.append(f"{result['created']} added")
+    if result['updated']:
+        parts.append(f"{result['updated']} updated")
+    if parts:
+        flash('Products ' + ' and '.join(parts) + ' on Smart99c.com.', 'success')
+    for msg in result['errors'][:10]:
+        flash(msg, 'error')
+    return redirect(back)
 
 
 @admin_bp.route('/products/<int:product_id>/variants/<int:variant_id>/delete', methods=['POST'])

@@ -11,6 +11,16 @@ when ``color_name`` is blank):
 
 Blank cells are treated as "leave unchanged" for existing records (not
 "clear"). Boolean cells accept TRUE/FALSE, 1/0, yes/no, on/off.
+
+Simple sheets work too: only a name column (or product_slug) is required,
+and friendly headers such as "Name", "Price", "Category", "Stock", "SKU",
+"UPC" or "Cost" are mapped to the template columns (see ALIASES).
+
+Uploads go through three steps so nothing is saved until the owner confirms:
+    parse_workbook()  → rows (plain dicts of strings)
+    preview_rows()    → what each row will do (new / update / error)
+    apply_rows()      → write to the database
+import_workbook() runs all three in one go.
 """
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
@@ -30,6 +40,30 @@ COLUMNS = [
     'color_name', 'color_hex', 'variant_sku', 'variant_price_override',
     'variant_cost_price', 'variant_stock_quantity',
 ]
+
+# Optional columns understood by the importer but not required in the template.
+OPTIONAL_COLUMNS = ['upc']
+ALL_COLUMNS = COLUMNS + OPTIONAL_COLUMNS
+
+# Friendly header → template column
+ALIASES = {
+    'name': 'product_name', 'product': 'product_name', 'product name': 'product_name', 'title': 'product_name',
+    'item': 'product_name', 'item name': 'product_name', 'description name': 'product_name',
+    'slug': 'product_slug',
+    'category': 'category_name', 'category name': 'category_name', 'department': 'category_name',
+    'price': 'price', 'retail': 'price', 'retail price': 'price', 'unit price': 'price', 'sell price': 'price',
+    'compare at': 'compare_price', 'compare at price': 'compare_price', 'msrp': 'compare_price', 'was price': 'compare_price',
+    'cost': 'cost_price', 'unit cost': 'cost_price', 'cost price': 'cost_price',
+    'sku': 'product_sku', 'item code': 'product_sku', 'item #': 'product_sku',
+    'upc': 'upc', 'barcode': 'upc', 'upc code': 'upc',
+    'stock': 'stock_quantity', 'qty': 'stock_quantity', 'quantity': 'stock_quantity', 'on hand': 'stock_quantity',
+    'short description': 'short_description', 'summary': 'short_description',
+    'long description': 'description',
+    'active': 'is_active', 'featured': 'is_featured',
+    'color': 'color_name', 'colour': 'color_name',
+}
+
+MAX_ROWS = 2000
 
 
 def _is_blank(value):
@@ -90,16 +124,29 @@ def _unique_slug(base, existing_id=None):
         suffix += 1
 
 
+def _find_category(name):
+    return Category.query.filter(db.func.lower(Category.name) == name.strip().lower()).first()
+
+
 def _resolve_category(name, cache):
+    """Find a category by name, creating it when it doesn't exist yet."""
     if not name:
         return None, None
     key = name.strip().lower()
     if key in cache:
         return cache[key], None
-    cat = Category.query.filter(db.func.lower(Category.name) == key).first()
-    cache[key] = cat
+    cat = _find_category(name)
     if not cat:
-        return None, f'category "{name}" not found'
+        base = generate_slug(name.strip()) or 'category'
+        slug, n = base, 1
+        while Category.query.filter_by(slug=slug).first():
+            n += 1
+            slug = f'{base}-{n}'
+        cat = Category(name=name.strip(), slug=slug, is_active=True,
+                       sort_order=(db.session.query(db.func.max(Category.sort_order)).scalar() or 0) + 1)
+        db.session.add(cat)
+        db.session.flush()
+    cache[key] = cat
     return cat, None
 
 
@@ -126,8 +173,108 @@ def _find_variant(product, variant_sku, color_name):
     return None
 
 
+def _cell_text(value):
+    """Normalise a spreadsheet cell to a plain string (or None) for preview/JSON."""
+    if _is_blank(value):
+        return None
+    if isinstance(value, bool):
+        return 'TRUE' if value else 'FALSE'
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value).strip()
+
+
+def parse_workbook(data):
+    """Read .xlsx bytes. Returns (rows, errors); rows are dicts of strings."""
+    errors = []
+    try:
+        wb = load_workbook(filename=BytesIO(data), read_only=True, data_only=True)
+    except Exception as e:
+        return [], [(0, f'Could not read workbook: {e}')]
+
+    ws = wb.active
+    it = ws.iter_rows(values_only=True)
+    try:
+        raw_header = next(it)
+    except StopIteration:
+        return [], [(0, 'File is empty.')]
+
+    header = []
+    for c in raw_header:
+        h = str(c).strip().lower() if c is not None else ''
+        header.append(h if h in ALL_COLUMNS else ALIASES.get(h, h))
+
+    if 'product_name' not in header and 'product_slug' not in header:
+        missing = [c for c in COLUMNS if c not in header]
+        return [], [(1, f'Missing columns: {", ".join(missing)}. '
+                        'Add at least a "Name" column (or use the template).')]
+
+    idx = {}
+    for i, h in enumerate(header):
+        if h in ALL_COLUMNS and h not in idx:
+            idx[h] = i
+
+    rows = []
+    row_number = 1
+    for raw in it:
+        row_number += 1
+        if raw is None or all(_is_blank(c) for c in raw):
+            continue
+        if len(rows) >= MAX_ROWS:
+            errors.append((row_number, f'Only the first {MAX_ROWS} rows are imported at once.'))
+            break
+        row = {'_row': row_number}
+        for col in ALL_COLUMNS:
+            i = idx.get(col)
+            row[col] = _cell_text(raw[i]) if i is not None and i < len(raw) else None
+        rows.append(row)
+    return rows, errors
+
+
+def preview_rows(rows):
+    """Describe what each row would do, without writing anything."""
+    out = []
+    known_cats = {c.name.lower() for c in Category.query.all()}
+    for row in rows:
+        r = dict(row)
+        problems = []
+        for col, conv in (('price', _as_decimal), ('compare_price', _as_decimal), ('cost_price', _as_decimal),
+                          ('weight', _as_decimal), ('stock_quantity', _as_int),
+                          ('variant_stock_quantity', _as_int), ('variant_price_override', _as_decimal),
+                          ('is_active', _as_bool), ('is_featured', _as_bool), ('track_inventory', _as_bool)):
+            try:
+                conv(r.get(col))
+            except ValueError as e:
+                problems.append(f'{col.replace("_", " ")}: {e}')
+        product = _find_product(_as_str(r.get('product_slug')), _as_str(r.get('product_name')))
+        if product is None and not _as_str(r.get('product_name')):
+            problems.append('a name is required for new products')
+        if product is None and _is_blank(r.get('price')):
+            problems.append('a price is required for new products')
+        cat = _as_str(r.get('category_name'))
+        r['_new_category'] = bool(cat and cat.lower() not in known_cats)
+        r['_product_id'] = product.id if product else None
+        r['_status'] = 'error' if problems else ('update' if product else 'new')
+        r['_message'] = '; '.join(problems)
+        out.append(r)
+    return out
+
+
 def import_workbook(file_storage):
-    """Process an uploaded .xlsx FileStorage. Returns a result dict."""
+    """Process an uploaded .xlsx FileStorage in one step. Returns a result dict."""
+    rows, errors = parse_workbook(file_storage.read())
+    if errors and not rows:
+        return {'created': 0, 'updated': 0, 'variants_created': 0, 'variants_updated': 0,
+                'skipped': 0, 'errors': errors}
+    result = apply_rows(rows)
+    result['errors'] = errors + result['errors']
+    return result
+
+
+def apply_rows(rows):
+    """Create / update products from parsed rows. Returns a result dict."""
     result = {
         'created': 0,
         'updated': 0,
@@ -136,39 +283,13 @@ def import_workbook(file_storage):
         'skipped': 0,
         'errors': [],
     }
-
-    try:
-        wb = load_workbook(filename=BytesIO(file_storage.read()), read_only=True, data_only=True)
-    except Exception as e:
-        result['errors'].append((0, f'Could not read workbook: {e}'))
-        return result
-
-    ws = wb.active
-    rows = ws.iter_rows(values_only=True)
-    try:
-        header = [str(c).strip().lower() if c is not None else '' for c in next(rows)]
-    except StopIteration:
-        result['errors'].append((0, 'File is empty.'))
-        return result
-
-    missing = [c for c in COLUMNS if c not in header]
-    if missing:
-        result['errors'].append((1, f'Missing columns: {", ".join(missing)}'))
-        return result
-
-    idx = {name: header.index(name) for name in COLUMNS}
     cat_cache = {}
 
     def cell(row, name):
-        i = idx[name]
-        return row[i] if i < len(row) else None
+        return row.get(name)
 
-    row_number = 1
-    for row in rows:
-        row_number += 1
-        if row is None or all(_is_blank(c) for c in row):
-            continue
-
+    for i, row in enumerate(rows):
+        row_number = row.get('_row') or i + 2
         savepoint = db.session.begin_nested()
         try:
             slug_in = _as_str(cell(row, 'product_slug'))
@@ -220,6 +341,9 @@ def import_workbook(file_storage):
             psku = _as_str(cell(row, 'product_sku'))
             if psku is not None:
                 product.sku = psku
+            upc = _as_str(cell(row, 'upc'))
+            if upc is not None:
+                product.upc = upc
             weight = _as_decimal(cell(row, 'weight'))
             if weight is not None:
                 product.weight = weight

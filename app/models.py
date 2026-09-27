@@ -78,6 +78,9 @@ class Product(db.Model):
     is_featured = db.Column(db.Boolean, default=False)
     weight = db.Column(db.Numeric(8, 2), default=0)
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=True)
+    # Barcode and IzyOps catalog link — set when a product is pulled from IzyOps.
+    upc = db.Column(db.String(120), index=True)
+    izyops_product_id = db.Column(db.Integer, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
