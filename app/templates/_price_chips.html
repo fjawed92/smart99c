@@ -1,0 +1,11 @@
+{# "Shop by price" buttons. Pass pc_endpoint, pc_args, pc_active (max price) and pc_deals via {% with %}. #}
+{% set price_steps = [(0.99, '99¢'), (1.99, '$1.99'), (4.99, '$4.99'), (9.99, '$9.99')] %}
+<nav class="pricechips" aria-label="Shop by price">
+  {% for amt, label in price_steps %}
+  {% set on = pc_active == amt %}
+  <a href="{{ url_for(pc_endpoint, **pc_args) if on else url_for(pc_endpoint, max_price=amt, **pc_args) }}"
+     class="pchip{% if on %} is-active{% endif %}"{% if on %} aria-current="true"{% endif %}><b>{{ label }}</b> &amp; under</a>
+  {% endfor %}
+  <a href="{{ url_for(pc_endpoint, **pc_args) if pc_deals else url_for(pc_endpoint, deals=1, **pc_args) }}"
+     class="pchip deal{% if pc_deals %} is-active{% endif %}"{% if pc_deals %} aria-current="true"{% endif %}><i class="bi bi-tag-fill"></i> On sale</a>
+</nav>

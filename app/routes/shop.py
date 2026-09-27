@@ -22,6 +22,7 @@ def _product_list(category_slug=None, current_category=None):
     sort = request.args.get('sort', 'newest')
     min_price = request.args.get('min_price', type=float)
     max_price = request.args.get('max_price', type=float)
+    deals = request.args.get('deals') == '1'
     per_page = current_app.config.get('PRODUCTS_PER_PAGE', 12)
 
     query = Product.query.filter_by(is_active=True)
@@ -42,6 +43,8 @@ def _product_list(category_slug=None, current_category=None):
         query = query.filter(Product.price >= min_price)
     if max_price is not None:
         query = query.filter(Product.price <= max_price)
+    if deals:
+        query = query.filter(Product.compare_price.isnot(None), Product.compare_price > Product.price)
 
     sort_map = {
         'newest': Product.created_at.desc(),
@@ -63,7 +66,8 @@ def _product_list(category_slug=None, current_category=None):
                            search=search,
                            sort=sort,
                            min_price=min_price,
-                           max_price=max_price)
+                           max_price=max_price,
+                           deals=deals)
 
 
 @shop_bp.route('/product/<slug>')

@@ -9,12 +9,15 @@ import math
 
 from markupsafe import Markup
 
-RED = '#E8334A'
-YELLOW = '#F5C518'
-NAVY = '#1A1A2E'
+# Logo palette: coral, gold, maroon, plus pink.
+RED = '#E8483F'
+YELLOW = '#FFC93C'
+NAVY = '#5E171C'
+PINK = '#F0668E'
 
 # (keywords, art kind) — first match wins.
 _KEYWORDS = [
+    (('balloon', 'helium'), 'balloon'),
     (('single', 'graded', ' ex ', ' vmax', ' gx'), 'single'),
     (('booster pack', 'pack', 'blister'), 'pack'),
     (('elite trainer', 'etb', 'box', 'bundle', 'tin', 'deck', 'collection'), 'box'),
@@ -88,6 +91,12 @@ def _body(kind, t):
                 f'<path d="M58 92h26v22H48zm32 0h24l22 22H90z" fill="#fff" opacity=".85"/>'
                 f'<circle cx="64" cy="142" r="18" fill="{N}"/><circle cx="64" cy="142" r="7" fill="{Y}"/>'
                 f'<circle cx="146" cy="142" r="18" fill="{N}"/><circle cx="146" cy="142" r="7" fill="{Y}"/>')
+    if kind == 'balloon':
+        return (f'<path d="M70 132c-6 18 8 26 0 48M128 118c6 20-8 34 2 62" fill="none" stroke="{N}" stroke-width="3"/>'
+                f'<ellipse cx="128" cy="72" rx="36" ry="42" fill="{Y}"/><path d="M122 112h12l-6 8z" fill="{Y}"/>'
+                f'<ellipse cx="70" cy="86" rx="40" ry="46" fill="{t}"/><path d="M64 130h12l-6 8z" fill="{t}"/>'
+                f'<ellipse cx="56" cy="68" rx="9" ry="15" fill="#fff" opacity=".45"/>'
+                f'<ellipse cx="116" cy="56" rx="7" ry="12" fill="#fff" opacity=".45"/>')
     if kind == 'sleeve':
         return (f'<rect x="66" y="34" width="84" height="120" rx="6" fill="{t}" opacity=".35"/>'
                 f'<rect x="56" y="44" width="84" height="120" rx="6" fill="{t}" opacity=".6"/>'
@@ -119,7 +128,7 @@ def product_art(product, tint=None):
     """Illustration for a product without a photo."""
     cat = product.category.name if getattr(product, 'category', None) else ''
     kind = art_kind(product.name, cat)
-    palette = (RED, YELLOW, NAVY)
+    palette = (RED, PINK, YELLOW)
     return art_svg(kind, tint or palette[(product.id or 0) % 3 if kind != 'pack' else 0], product.name)
 
 
