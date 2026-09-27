@@ -532,6 +532,74 @@ def products_import_confirm():
     return render_template('admin/products_import_result.html', result=result)
 
 
+# ─── Pull products from IzyOps ───────────────────────────────────────────────
+
+@admin_bp.route('/izyops', methods=['GET'])
+@admin_required
+def izyops_pull():
+    """Search the IzyOps catalog and preview results before adding them."""
+    from app.services import izyops_client
+    from app.services.izyops_import import on_site_map
+
+    mode = request.args.get('mode', 'keyword')
+    q = request.args.get('q', '').strip()
+    page = request.args.get('page', 1, type=int)
+    connected = izyops_client.is_configured()
+
+    facets, facets_error = ({}, None)
+    if connected:
+        facets, facets_error = izyops_client.get_facets()
+        facets = facets or {}
+
+    items, meta, error = [], {}, None
+    searched = 'q' in request.args
+    if connected and searched:
+        items, meta, error = izyops_client.search_products(mode, q, page)
+        on_site = on_site_map(items)
+        for it in items:
+            site = on_site.get(it['product_id'])
+            it['site_product'] = {'id': site.id, 'name': site.name, 'price': float(site.price),
+                                  'category': site.category.name if site.category else ''} if site else None
+            it['tidy_name'] = site.name if site else izyops_client.tidy_name(it.get('product_name'))
+
+    categories = Category.query.order_by(Category.sort_order, Category.name).all()
+    return render_template('admin/izyops_pull.html',
+                           connected=connected, store=izyops_client.settings()['store'],
+                           facets=facets, facets_error=facets_error,
+                           mode=mode, q=q, page=page, items=items, meta=meta, error=error,
+                           searched=searched, categories=categories)
+
+
+@admin_bp.route('/izyops/add', methods=['POST'])
+@admin_required
+def izyops_add():
+    import json
+    from app.services.izyops_import import save_items
+
+    try:
+        items = json.loads(request.form.get('items_json') or '[]')
+    except ValueError:
+        items = None
+    back = request.form.get('back') or url_for('admin.izyops_pull')
+    if not back.startswith('/admin/izyops') or '\\' in back:
+        back = url_for('admin.izyops_pull')
+    if not isinstance(items, list) or not items:
+        flash('Select at least one product to add.', 'warning')
+        return redirect(back)
+
+    result = save_items([i for i in items if isinstance(i, dict)])
+    parts = []
+    if result['created']:
+        parts.append(f"{result['created']} added")
+    if result['updated']:
+        parts.append(f"{result['updated']} updated")
+    if parts:
+        flash('Products ' + ' and '.join(parts) + ' on Smart99c.com.', 'success')
+    for msg in result['errors'][:10]:
+        flash(msg, 'error')
+    return redirect(back)
+
+
 @admin_bp.route('/products/<int:product_id>/variants/<int:variant_id>/delete', methods=['POST'])
 @admin_required
 def delete_variant(product_id, variant_id):

@@ -1,0 +1,227 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}Pull from IzyOps — Products{% endblock %}
+{% block page_title %}Pull from IzyOps{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <p class="text-muted mb-0">Find products in your IzyOps catalog, check the details, then add them to Smart99c.com.</p>
+  {% if connected and not facets_error %}
+  <span class="conn"><i class="bi bi-circle-fill" style="font-size:7px"></i>Connected · {{ store }}</span>
+  {% else %}
+  <span class="conn off"><i class="bi bi-circle-fill" style="font-size:7px"></i>Not connected</span>
+  {% endif %}
+</div>
+
+{% if not connected %}
+<div class="card mb-4"><div class="card-body">
+  <h6 class="mb-3">Connect IzyOps (one-time setup)</h6>
+  <ol class="mb-0" style="line-height:1.9">
+    <li>In IzyOps, create a user for the website (for example <span class="mono">webstore</span>) with access to <strong>{{ store }}</strong>.</li>
+    <li>In Render, open this website's service → <strong>Environment</strong> and add:
+      <div class="mono small mt-1">IZYOPS_URL = your IzyOps address (e.g. https://izyops.onrender.com)<br>IZYOPS_USERNAME = webstore<br>IZYOPS_PASSWORD = that user's password<br>IZYOPS_STORE_NAME = {{ store }}</div></li>
+    <li>Save. Render restarts the site, and this page will show <strong>Connected</strong>.</li>
+  </ol>
+</div></div>
+{% elif facets_error %}
+<div class="alert alert-danger">{{ facets_error }}</div>
+{% endif %}
+
+{% if connected %}
+<form method="get" action="{{ url_for('admin.izyops_pull') }}" class="card mb-3" id="searchForm">
+  <div class="card-body d-grid gap-3">
+    <div class="seg" role="radiogroup" aria-label="Search by">
+      {% for m, label in [('keyword', 'Keyword'), ('category', 'Category'), ('vendor', 'Vendor'), ('upc', 'Single product (UPC)')] %}
+      <input type="radio" name="mode" id="mode-{{ m }}" value="{{ m }}" {% if mode == m %}checked{% endif %}>
+      <label for="mode-{{ m }}">{{ label }}</label>
+      {% endfor %}
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <input class="form-control q-ctl" data-for="keyword" name="q" value="{{ q if mode == 'keyword' else '' }}" placeholder="Search name, UPC or item code, e.g. pokemon" style="flex:1;min-width:220px" aria-label="Keyword">
+      <input class="form-control q-ctl mono" data-for="upc" name="q" value="{{ q if mode == 'upc' else '' }}" placeholder="Scan or type a UPC" style="flex:1;min-width:220px" inputmode="numeric" aria-label="UPC">
+      <select class="form-select q-ctl" data-for="category" name="q" style="flex:1;min-width:220px" aria-label="Category">
+        <option value="">Choose a category…</option>
+        {% for c in facets.get('categories', []) %}<option value="{{ c.name }}" {% if mode == 'category' and q == c.name %}selected{% endif %}>{{ c.name }} ({{ c.product_count }})</option>{% endfor %}
+      </select>
+      <select class="form-select q-ctl" data-for="vendor" name="q" style="flex:1;min-width:220px" aria-label="Vendor">
+        <option value="">Choose a vendor…</option>
+        {% for v in facets.get('vendors', []) %}<option value="{{ v.vendor_id }}" {% if mode == 'vendor' and q == v.vendor_id|string %}selected{% endif %}>{{ v.vendor_name }} ({{ v.product_count }})</option>{% endfor %}
+      </select>
+      <button class="btn btn-dark" type="submit"><i class="bi bi-search me-1"></i>Search IzyOps</button>
+    </div>
+  </div>
+</form>
+{% endif %}
+
+{% if error %}<div class="alert alert-warning">{{ error }}</div>{% endif %}
+
+{% if items %}
+<datalist id="catList">{% for c in categories %}<option value="{{ c.name }}"></option>{% endfor %}</datalist>
+
+<div class="bulk-action-bar mb-3">
+  <strong><span id="selCount">0</span> selected</strong>
+  <span class="text-muted">·</span>
+  <label class="d-flex align-items-center gap-2 mb-0">Site price
+    <select class="form-select form-select-sm" id="priceRule" style="width:auto">
+      <option value="match">Same as store price</option>
+      <option value="markup">Store price + markup %</option>
+      <option value="cost">Cost + markup %</option>
+    </select>
+  </label>
+  <input type="number" class="form-control form-control-sm mono" id="pricePct" value="0" style="width:80px" aria-label="Markup percent" disabled> %
+  <label class="d-flex align-items-center gap-1 mb-0"><input type="checkbox" class="form-check-input" id="round99"> end in .99</label>
+  <span class="text-muted">·</span>
+  <label class="d-flex align-items-center gap-2 mb-0">Category
+    <input class="form-control form-control-sm" id="bulkCat" list="catList" placeholder="Set for selected" style="width:180px">
+  </label>
+  <button type="button" class="btn btn-sm" id="applyBulk">Apply to selected</button>
+</div>
+
+<div class="card"><div class="table-responsive">
+  <table class="table edit-table align-middle mb-0" id="izTable">
+    <thead><tr>
+      <th style="width:34px"><input type="checkbox" class="form-check-input" id="selAll" aria-label="Select all"></th>
+      <th></th><th>Name on site</th><th>Site category</th><th class="text-end">Cost</th><th class="text-end">Store price</th>
+      <th>Site price</th><th>Compare at</th><th>Stock</th><th>Featured</th><th>Status</th>
+    </tr></thead>
+    <tbody>
+      {% for it in items %}
+      <tr data-i="{{ loop.index0 }}">
+        <td><input type="checkbox" class="form-check-input row-sel" aria-label="Select {{ it.product_name }}"></td>
+        <td><div class="thumb">{% if it.image_url %}<img src="{{ it.image_url }}" alt="" loading="lazy">{% else %}{{ art_svg(art_kind(it.product_name, it.product_category), '#E8334A') }}{% endif %}</div></td>
+        <td style="min-width:260px">
+          <input class="form-control" data-f="name" value="{{ it.tidy_name }}" aria-label="Name on site">
+          <div class="src">{{ it.product_name }} · UPC {{ it.upc_code or '—' }}{% if it.vendor_name %} · {{ it.vendor_name }}{% endif %}</div>
+        </td>
+        <td><input class="form-control" data-f="category" list="catList" value="{{ it.site_product.category if it.site_product else '' }}" placeholder="Choose…" aria-label="Site category" style="min-width:150px"></td>
+        <td class="text-end mono">{{ '$%.2f'|format(it.latest_cost or it.unit_cost) if (it.latest_cost or it.unit_cost) else '—' }}</td>
+        <td class="text-end mono">{{ '$%.2f'|format(it.unit_price) if it.unit_price else '—' }}</td>
+        <td><input class="form-control mono" data-f="price" value="{{ '%.2f'|format(it.site_product.price if it.site_product else (it.unit_price or 0)) if (it.site_product or it.unit_price) else '' }}" inputmode="decimal" aria-label="Site price" style="width:96px"><div class="margin"></div></td>
+        <td><input class="form-control mono" data-f="compare_price" value="" inputmode="decimal" aria-label="Compare at price" style="width:90px"></td>
+        <td><input class="form-control mono" data-f="stock" value="{{ it.quantity_on_hand|int if it.quantity_on_hand is not none else '' }}" inputmode="numeric" aria-label="Stock" style="width:74px"
+                   {% if it.quantity_on_hand is none %}placeholder="?" title="Not tracked in IzyOps. Enter how many you have."{% endif %}></td>
+        <td class="text-center"><input type="checkbox" class="form-check-input" data-f="is_featured" aria-label="Featured"></td>
+        <td>{% if it.site_product %}<span class="row-pill on">On site</span>{% else %}<span class="row-pill new">New</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+
+{% set pages = meta.get('pages') or 1 %}
+{% if pages > 1 %}
+<nav class="mt-3 d-flex gap-2 align-items-center">
+  {% if page > 1 %}<a class="btn btn-sm" href="{{ url_for('admin.izyops_pull', mode=mode, q=q, page=page-1) }}">← Previous</a>{% endif %}
+  <span class="lbl text-muted">Page {{ page }} of {{ pages }} · {{ meta.get('total') }} products</span>
+  {% if page < pages %}<a class="btn btn-sm" href="{{ url_for('admin.izyops_pull', mode=mode, q=q, page=page+1) }}">Next →</a>{% endif %}
+</nav>
+{% endif %}
+
+<form method="post" action="{{ url_for('admin.izyops_add') }}" class="sticky-actions" id="addForm">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="items_json" id="itemsJson">
+  <input type="hidden" name="back" value="{{ request.full_path }}">
+  <button type="submit" class="btn btn-primary" id="addBtn" disabled>Select products to add</button>
+  <span class="text-muted small" id="addHint">Tick the products you want, check the price and category, then add them.</span>
+</form>
+<script id="izItems" type="application/json">{{ items|tojson }}</script>
+{% elif searched and not error %}
+<div class="empty-state"><h3>No matches</h3><p class="text-muted mb-0">Nothing in IzyOps matched that search. Try fewer words or a different category.</p></div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  // Show only the input for the chosen search type (the others are disabled so they don't submit).
+  function syncMode() {
+    const mode = (document.querySelector('input[name=mode]:checked') || {}).value || 'keyword';
+    document.querySelectorAll('.q-ctl').forEach(el => { const on = el.dataset.for === mode; el.hidden = !on; el.disabled = !on; });
+  }
+  document.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change', () => {
+    syncMode();
+    const ctl = document.querySelector(`.q-ctl[data-for="${document.querySelector('input[name=mode]:checked').value}"]`);
+    if (ctl) ctl.focus();
+  }));
+  document.querySelectorAll('select.q-ctl').forEach(s => s.addEventListener('change', () => { if (s.value) document.getElementById('searchForm').submit(); }));
+  syncMode();
+
+  const table = document.getElementById('izTable');
+  if (!table) return;
+  const items = JSON.parse(document.getElementById('izItems').textContent);
+  const rows = [...table.tBodies[0].rows];
+  const f = (tr, name) => tr.querySelector(`[data-f="${name}"]`);
+  const money = n => (Math.round(n * 100) / 100).toFixed(2);
+
+  function margin(tr) {
+    const it = items[+tr.dataset.i], cost = it.latest_cost || it.unit_cost, price = parseFloat(f(tr, 'price').value);
+    const el = tr.querySelector('.margin');
+    if (!cost || !(price > 0)) { el.textContent = ''; return; }
+    const m = Math.round((1 - cost / price) * 100);
+    el.className = 'margin ' + (m < 25 ? 'margin-low' : 'margin-ok');
+    el.textContent = m + '% margin';
+  }
+
+  function refresh() {
+    const sel = rows.filter(tr => tr.querySelector('.row-sel').checked);
+    rows.forEach(tr => tr.classList.toggle('sel', tr.querySelector('.row-sel').checked));
+    document.getElementById('selCount').textContent = sel.length;
+    const missing = sel.filter(tr => !(parseFloat(f(tr, 'price').value) > 0) || !f(tr, 'name').value.trim()).length;
+    const btn = document.getElementById('addBtn');
+    btn.disabled = !sel.length || missing > 0;
+    btn.textContent = !sel.length ? 'Select products to add' : `Add ${sel.length} product${sel.length === 1 ? '' : 's'} to site`;
+    document.getElementById('addHint').textContent = missing ? `${missing} selected product${missing === 1 ? ' needs' : 's need'} a name and price.` :
+      (sel.length ? 'Products already on the site are updated, not duplicated.' : 'Tick the products you want, check the price and category, then add them.');
+    const all = document.getElementById('selAll'); all.checked = sel.length === rows.length; all.indeterminate = sel.length > 0 && sel.length < rows.length;
+  }
+
+  table.addEventListener('input', e => {
+    const tr = e.target.closest('tr[data-i]'); if (!tr) return;
+    if (e.target.dataset.f && !tr.querySelector('.row-sel').checked) tr.querySelector('.row-sel').checked = true;
+    margin(tr); refresh();
+  });
+  table.addEventListener('change', e => { if (e.target.classList.contains('row-sel') || e.target.dataset.f === 'is_featured') refresh(); });
+  document.getElementById('selAll').addEventListener('change', e => { rows.forEach(tr => { tr.querySelector('.row-sel').checked = e.target.checked; }); refresh(); });
+
+  const rule = document.getElementById('priceRule'), pct = document.getElementById('pricePct');
+  rule.addEventListener('change', () => { pct.disabled = rule.value === 'match'; });
+  document.getElementById('applyBulk').addEventListener('click', () => {
+    const sel = rows.filter(tr => tr.querySelector('.row-sel').checked);
+    if (!sel.length) { alert('Tick at least one product first.'); return; }
+    const p = parseFloat(pct.value) || 0, r99 = document.getElementById('round99').checked, cat = document.getElementById('bulkCat').value.trim();
+    sel.forEach(tr => {
+      const it = items[+tr.dataset.i], cost = it.latest_cost || it.unit_cost;
+      let price = null;
+      if (rule.value === 'match' && it.unit_price) price = it.unit_price;
+      if (rule.value === 'markup' && it.unit_price) price = it.unit_price * (1 + p / 100);
+      if (rule.value === 'cost' && cost) price = cost * (1 + p / 100);
+      if (price !== null) {
+        if (r99) price = Math.max(0.99, Math.floor(price) + 0.99);
+        f(tr, 'price').value = money(price);
+      }
+      if (cat) f(tr, 'category').value = cat;
+      margin(tr);
+    });
+    refresh();
+  });
+
+  document.getElementById('addForm').addEventListener('submit', e => {
+    const out = rows.filter(tr => tr.querySelector('.row-sel').checked).map(tr => {
+      const it = items[+tr.dataset.i];
+      return {
+        izyops_product_id: it.product_id, upc: it.upc_code, sku: it.item_code || it.upc_code,
+        cost: it.latest_cost || it.unit_cost, image_url: it.image_url,
+        name: f(tr, 'name').value.trim(), category: f(tr, 'category').value.trim(),
+        price: f(tr, 'price').value.trim(), compare_price: f(tr, 'compare_price').value.trim(),
+        stock: f(tr, 'stock').value.trim(), is_featured: f(tr, 'is_featured').checked, is_active: true,
+      };
+    });
+    if (!out.length) { e.preventDefault(); return; }
+    document.getElementById('itemsJson').value = JSON.stringify(out);
+    const btn = document.getElementById('addBtn'); btn.disabled = true; btn.textContent = 'Adding…';
+  });
+
+  rows.forEach(margin);
+  refresh();
+})();
+</script>
+{% endblock %}
