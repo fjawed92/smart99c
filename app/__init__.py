@@ -77,7 +77,7 @@ def create_app(config_name='default'):
     def inject_globals():
         cart_count = get_cart_count()
         try:
-            categories = Category.query.filter_by(is_active=True).order_by(Category.sort_order, Category.name).all()
+            categories = Category.shoppable().order_by(Category.sort_order, Category.name).all()
             db_ok = True
         except SQLAlchemyError:
             # Database unreachable — still render pages (incl. the error page)
