@@ -24,11 +24,11 @@ def index():
         .order_by(Product.updated_at.desc()).limit(8).all()
     new_products = Product.query.filter_by(is_active=True)\
         .order_by(Product.created_at.desc()).limit(8).all()
-    categories = Category.query.filter_by(is_active=True)\
+    categories = Category.shoppable()\
         .order_by(Category.sort_order, Category.name).limit(8).all()
     # Balloons always get a home-page tile, even when they sort past the first 8.
     if not any('balloon' in c.name.lower() for c in categories):
-        balloons = Category.query.filter(Category.is_active.is_(True), Category.name.ilike('%balloon%')).first()
+        balloons = Category.shoppable().filter(Category.name.ilike('%balloon%')).first()
         if balloons:
             categories = categories[:7] + [balloons]
 

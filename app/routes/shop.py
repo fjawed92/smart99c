@@ -57,7 +57,7 @@ def _product_list(category_slug=None, current_category=None):
 
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     g.visit_search_results = pagination.total
-    categories = Category.query.filter_by(is_active=True).order_by(Category.name).all()
+    categories = Category.shoppable().order_by(Category.name).all()
 
     return render_template('shop.html',
                            products=pagination.items,

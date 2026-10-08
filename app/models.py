@@ -56,6 +56,12 @@ class Category(db.Model):
 
     products = db.relationship('Product', back_populates='category', lazy='dynamic')
 
+    @classmethod
+    def shoppable(cls):
+        """Active categories that have at least one active product — the ones shoppers see."""
+        has_products = db.exists().where(Product.category_id == cls.id, Product.is_active.is_(True))
+        return cls.query.filter(cls.is_active.is_(True), has_products)
+
     def __repr__(self):
         return f'<Category {self.name}>'
 
