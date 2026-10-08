@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, session, jsonify, redirect, url_for, flash
 from app.models import Product, ProductVariant
+from app.services.visits import track_event
 from app.helpers import (get_cart_items, get_cart_subtotal, get_cart_count,
                          make_line_key, _normalize_cart)
 
@@ -85,6 +86,7 @@ def add_to_cart():
 
     cart[key] = new_qty
     _save_cart(cart)
+    track_event('add_to_cart', product_id=product.id)
 
     cart_count = sum(cart.values())
     name = f'{product.name} ({variant.color_name})' if variant else product.name

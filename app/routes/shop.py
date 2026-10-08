@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, abort, current_app
+from flask import Blueprint, render_template, request, abort, current_app, g
 from app.models import Product, Category
 from app.extensions import db
 
@@ -56,6 +56,7 @@ def _product_list(category_slug=None, current_category=None):
     query = query.order_by(sort_map.get(sort, Product.created_at.desc()))
 
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    g.visit_search_results = pagination.total
     categories = Category.query.filter_by(is_active=True).order_by(Category.name).all()
 
     return render_template('shop.html',
@@ -73,6 +74,7 @@ def _product_list(category_slug=None, current_category=None):
 @shop_bp.route('/product/<slug>')
 def product_detail(slug):
     product = Product.query.filter_by(slug=slug, is_active=True).first_or_404()
+    g.visit_product_id = product.id
     related = []
     if product.category_id:
         related = Product.query.filter(

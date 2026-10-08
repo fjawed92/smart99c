@@ -1,3 +1,4 @@
+import re
 import cloudinary
 from datetime import datetime
 from flask import Flask
@@ -46,6 +47,10 @@ def create_app(config_name='default'):
     app.register_blueprint(orders_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp, url_prefix='/admin')
+
+    # Visitor analytics (Admin → Visitors)
+    from app.services.visits import record_page_view
+    app.after_request(record_page_view)
 
     # Custom error handlers
     from flask import render_template
@@ -102,6 +107,9 @@ def create_app(config_name='default'):
                 store['free_delivery_over'] = int(threshold) if threshold.is_integer() else threshold
         except ValueError:
             pass
+        ga_id = setting('ga_measurement_id', '').strip().upper()
+        if not re.fullmatch(r'G-[A-Z0-9]{4,15}', ga_id):
+            ga_id = ''
         footer_social = {
             'facebook': {
                 'url': setting('facebook_url', ''),
@@ -123,6 +131,7 @@ def create_app(config_name='default'):
             footer_social=footer_social,
             stripe_public_key=app.config.get('STRIPE_PUBLIC_KEY', ''),
             store=store,
+            ga_measurement_id=ga_id,
             current_year=datetime.utcnow().year,
         )
 

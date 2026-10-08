@@ -358,3 +358,29 @@ class PaymentLink(db.Model):
 
     def __repr__(self):
         return f'<PaymentLink {self.description} ${self.amount}>'
+
+
+class SiteVisit(db.Model):
+    """One page view or shopper action, for Admin → Visitors.
+
+    `visitor_id` is a random token kept in the shopper's session cookie —
+    no IP address or personal details are stored.
+    """
+    __tablename__ = 'site_visits'
+
+    EVENTS = ['view', 'add_to_cart', 'order']
+
+    id = db.Column(db.Integer, primary_key=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    visitor_id = db.Column(db.String(32), nullable=False, index=True)
+    event = db.Column(db.String(20), default='view', nullable=False)
+    endpoint = db.Column(db.String(80))
+    path = db.Column(db.String(300))
+    product_id = db.Column(db.Integer, db.ForeignKey('products.id', ondelete='SET NULL'), index=True)
+    referrer = db.Column(db.String(120))
+    device = db.Column(db.String(10))
+    search = db.Column(db.String(120))
+    search_results = db.Column(db.Integer)
+    order_total = db.Column(db.Numeric(10, 2))
+
+    product = db.relationship('Product')
