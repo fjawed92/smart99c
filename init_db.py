@@ -9,9 +9,10 @@ It:
     2. adds columns introduced by later releases (same checks as upgrade_db.py),
     3. adds starter categories and delivery options to an empty store,
     4. creates the first admin from ADMIN_EMAIL / ADMIN_PASSWORD when the
-       database has no admin yet.
+       database has no admin yet,
+    5. clears visitor-analytics rows older than about 13 months.
 
-Nothing here deletes or overwrites existing data.
+Apart from old visitor-analytics rows, nothing here deletes or overwrites data.
 """
 import os
 import sys
@@ -25,6 +26,7 @@ from app.extensions import db
 from app.models import User, Category, ShippingRate
 from app.defaults import ensure_defaults
 from app.helpers import generate_slug
+from app.services.visits import purge_old_visits, RETENTION_DAYS
 
 # (table, column, SQL type) added after the first release.
 EXTRA_COLUMNS = [
@@ -73,6 +75,9 @@ def init_db(app=None):
         for what in ensure_defaults(db, Category, ShippingRate, generate_slug):
             print(f'Created starter {what}.')
         ensure_admin()
+        removed = purge_old_visits()
+        if removed:
+            print(f'Removed {removed} visitor records older than {RETENTION_DAYS} days.')
     print('Database ready.')
 
 

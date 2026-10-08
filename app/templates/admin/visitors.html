@@ -1,0 +1,276 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}Visitors{% endblock %}
+{% block page_title %}Visitors{% endblock %}
+
+{% macro hour_label(h) %}{{ (h % 12) or 12 }}{{ 'a' if h < 12 else 'p' }}{% endmacro %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+  <nav class="seg" aria-label="Date range">
+    {% for value, label in [(1, 'Today'), (7, '7 days'), (30, '30 days'), (90, '90 days'), (365, 'Year')] %}
+    <a href="{{ url_for('admin.visitors', days=value) }}" class="seg-link {% if days == value %}on{% endif %}">{{ label }}</a>
+    {% endfor %}
+  </nav>
+  <div class="text-muted small">
+    {{ r.first_day.strftime('%b %d') }}{% if r.days > 1 %} – {{ r.last_day.strftime('%b %d, %Y') }}{% else %}, {{ r.last_day.strftime('%Y') }}{% endif %}
+    · New York time · your own visits are not counted
+  </div>
+</div>
+
+{% if r.visitors == 0 %}
+<div class="card border-0 shadow-sm p-4 text-center">
+  <i class="bi bi-hourglass-split fs-1"></i>
+  <h5 class="mt-2">No visitors recorded yet for this period</h5>
+  <p class="text-muted mb-0">Tracking starts from the moment this update goes live. Check back once shoppers have visited.
+    Visits while you are logged in as an admin are not counted, so open the store in a private window to test it.</p>
+</div>
+{% else %}
+
+<!-- Headline numbers -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-xl">
+    <div class="card border-0 shadow-sm p-3 h-100">
+      <div class="kpi-label">Visitors</div>
+      <div class="kpi-value">{{ r.visitors }}</div>
+      {% if r.visitors_change is not none %}
+      <div class="kpi-sub {{ 'up' if r.visitors_change >= 0 else 'down' }}">
+        <i class="bi bi-arrow-{{ 'up' if r.visitors_change >= 0 else 'down' }}-short"></i>{{ r.visitors_change|abs }}% vs previous {{ r.days }} day{{ 's' if r.days > 1 }}
+      </div>
+      {% else %}<div class="kpi-sub">people who visited</div>{% endif %}
+    </div>
+  </div>
+  <div class="col-6 col-xl">
+    <div class="card border-0 shadow-sm p-3 h-100">
+      <div class="kpi-label">Page views</div>
+      <div class="kpi-value">{{ r.page_views }}</div>
+      <div class="kpi-sub">{{ r.pages_per_visitor }} pages per visitor</div>
+    </div>
+  </div>
+  <div class="col-6 col-xl">
+    <div class="card border-0 shadow-sm p-3 h-100">
+      <div class="kpi-label">New / returning</div>
+      <div class="kpi-value">{{ r.new_visitors }} <span class="kpi-small">/ {{ r.returning_visitors }}</span></div>
+      <div class="kpi-sub">returning = visited before this period</div>
+    </div>
+  </div>
+  <div class="col-6 col-xl">
+    <div class="card border-0 shadow-sm p-3 h-100">
+      <div class="kpi-label">Online orders</div>
+      <div class="kpi-value">{{ r.orders }}</div>
+      <div class="kpi-sub">${{ "%.2f"|format(r.revenue) }} from tracked visitors</div>
+    </div>
+  </div>
+  <div class="col-12 col-xl">
+    <div class="card border-0 shadow-sm p-3 h-100">
+      <div class="kpi-label">Visitors who ordered</div>
+      <div class="kpi-value">{{ r.conversion }}%</div>
+      <div class="kpi-sub">1–3% is typical for online shops</div>
+    </div>
+  </div>
+</div>
+
+{% if r.tips %}
+<div class="card border-0 shadow-sm mb-4 tips-card">
+  <div class="card-body">
+    <h6 class="fw-700 mb-2"><i class="bi bi-lightbulb me-2"></i>What this means for the store</h6>
+    <ul class="mb-0">
+      {% for tip in r.tips %}<li>{{ tip }}</li>{% endfor %}
+    </ul>
+  </div>
+</div>
+{% endif %}
+
+<!-- Visitors over time -->
+{% if r.days > 1 %}
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body">
+    <h6 class="fw-700 mb-3">Visitors per day</h6>
+    <div class="vchart" role="img" aria-label="Unique visitors per day">
+      {% for d in r.daily %}
+      <div class="vcol" data-tip="{{ d.date.strftime('%a %b %d') }}: {{ d.visitors }} visitor{{ 's' if d.visitors != 1 }}" tabindex="0">
+        <span class="vbar" style="height: {{ (100 * d.visitors / r.daily_max)|round(1) }}%"></span>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="vaxis">
+      <span>{{ r.daily[0].date.strftime('%b %d') }}</span>
+      <span>peak {{ r.daily_max }} / day</span>
+      <span>{{ r.daily[-1].date.strftime('%b %d') }}</span>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="row g-3 mb-4">
+  <div class="col-lg-{{ 7 if r.days >= 7 else 12 }}">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <h6 class="fw-700 mb-3">Busiest times of day</h6>
+        <div class="vchart vchart-sm" role="img" aria-label="Visitors by hour of day">
+          {% for h in r.hours %}
+          <div class="vcol" data-tip="{{ hour_label(h.hour) }}m: {{ h.visitors }} visitor{{ 's' if h.visitors != 1 }}" tabindex="0">
+            <span class="vbar" style="height: {{ (100 * h.visitors / r.hours_max)|round(1) }}%"></span>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="vaxis"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>
+      </div>
+    </div>
+  </div>
+  {% if r.days >= 7 %}
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <h6 class="fw-700 mb-3">Busiest days of the week</h6>
+        {% for w in r.weekdays %}
+        <div class="hrow">
+          <span class="hname">{{ w.day }}</span>
+          <span class="htrack"><span class="hbar" style="width: {{ (100 * w.visitors / r.weekdays_max)|round(1) }}%"></span></span>
+          <span class="hnum">{{ w.visitors }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="row g-3 mb-4">
+  <!-- Funnel -->
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <h6 class="fw-700 mb-1">From visit to order</h6>
+        <p class="text-muted small mb-3">How far shoppers get. The biggest drop shows where you lose people.</p>
+        {% for step in r.funnel %}
+        <div class="hrow hrow-funnel">
+          <span class="hname">{{ step.label }}</span>
+          <span class="htrack"><span class="hbar" style="width: {{ step.pct }}%"></span></span>
+          <span class="hnum">{{ step.visitors }} <small class="text-muted">· {{ step.pct }}%</small></span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Sources & devices -->
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <h6 class="fw-700 mb-1">Where visitors come from</h6>
+        <p class="text-muted small mb-3">Add <code>?utm_source=flyer</code> (or instagram, receipt…) to links you share to see them here by name.</p>
+        {% for s in r.sources %}
+        <div class="hrow">
+          <span class="hname" title="{{ s.name }}">{{ s.name }}</span>
+          <span class="htrack"><span class="hbar" style="width: {{ (100 * s.visitors / r.sources_max)|round(1) }}%"></span></span>
+          <span class="hnum">{{ s.visitors }}{% if s.orders %} <small class="text-muted">· {{ s.orders }} ordered</small>{% endif %}</span>
+        </div>
+        {% endfor %}
+        <h6 class="fw-700 mt-4 mb-2">Devices</h6>
+        <div class="d-flex flex-wrap gap-2">
+          {% for d in r.devices %}
+          <span class="row-pill on"><i class="bi bi-{{ {'Mobile': 'phone', 'Tablet': 'tablet', 'Desktop': 'laptop'}[d.name] }} me-1"></i>{{ d.name }} {{ d.pct }}%</span>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Products -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header bg-white border-0 pt-3">
+    <h6 class="fw-700 mb-0">Most viewed products</h6>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr><th>Product</th><th class="text-end">Price</th><th class="text-end">Viewers</th><th class="text-end">Added to cart</th><th class="text-end">Cart rate</th></tr>
+        </thead>
+        <tbody>
+          {% for p in r.top_products %}
+          <tr>
+            <td><a href="{{ url_for('admin.edit_product', product_id=p.product.id) }}">{{ p.product.name }}</a></td>
+            <td class="text-end">${{ "%.2f"|format(p.product.price) }}</td>
+            <td class="text-end fw-600">{{ p.viewers }}</td>
+            <td class="text-end">{{ p.carted }}</td>
+            <td class="text-end">{{ p.cart_rate }}%</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-center text-muted py-4">No product views yet</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% if r.not_converting %}
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header bg-white border-0 pt-3">
+    <h6 class="fw-700 mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Worth a look: viewed a lot, rarely added to cart</h6>
+    <small class="text-muted">People are interested but not buying. Check the price, photo, description or stock.</small>
+  </div>
+  <div class="card-body p-0">
+    <table class="table mb-0">
+      <tbody>
+        {% for p in r.not_converting %}
+        <tr>
+          <td><a href="{{ url_for('admin.edit_product', product_id=p.product.id) }}">{{ p.product.name }}</a></td>
+          <td class="text-end">{{ p.viewers }} viewers</td>
+          <td class="text-end">{{ p.carted }} added · {{ p.cart_rate }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="row g-3 mb-4">
+  <!-- Searches -->
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white border-0 pt-3">
+        <h6 class="fw-700 mb-0">What people search for</h6>
+        <small class="text-muted"><span class="row-pill error">No results</span> means shoppers wanted it and couldn't find it.</small>
+      </div>
+      <div class="card-body p-0">
+        <table class="table mb-0">
+          <tbody>
+            {% for s in r.searches %}
+            <tr>
+              <td>{{ s.term }} {% if s.no_results %}<span class="row-pill error ms-1">No results</span>{% endif %}</td>
+              <td class="text-end">{{ s.count }}×</td>
+            </tr>
+            {% else %}
+            <tr><td class="text-center text-muted py-4">No searches yet</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pages -->
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white border-0 pt-3">
+        <h6 class="fw-700 mb-0">Top pages</h6>
+      </div>
+      <div class="card-body p-0">
+        <table class="table mb-0">
+          <thead class="table-light"><tr><th>Page</th><th class="text-end">Views</th><th class="text-end">Visitors</th></tr></thead>
+          <tbody>
+            {% for p in r.pages %}
+            <tr><td>{{ p.name }}</td><td class="text-end">{{ p.views }}</td><td class="text-end">{{ p.visitors }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

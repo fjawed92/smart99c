@@ -987,6 +987,7 @@ def settings():
             'facebook_active',
             'instagram_active',
             'tiktok_active',
+            'ga_measurement_id',
         ]
         for key in keys:
             value = '1' if key.endswith('_active') and request.form.get(key) == 'on' else request.form.get(key, '')
@@ -1001,6 +1002,18 @@ def settings():
 
     settings_dict = {s.key: s.value for s in SiteSettings.query.all()}
     return render_template('admin/settings.html', settings=settings_dict)
+
+
+# ─── Visitors (site analytics) ───────────────────────────────────────────────
+
+@admin_bp.route('/visitors')
+@admin_required
+def visitors():
+    from app.services.visits import build_report
+    days = request.args.get('days', 30, type=int)
+    if days not in (1, 7, 30, 90, 365):
+        days = 30
+    return render_template('admin/visitors.html', r=build_report(days), days=days)
 
 
 # ─── Email / SMTP Settings ───────────────────────────────────────────────────

@@ -10,6 +10,7 @@ from app.extensions import db
 from app.models import (Order, OrderItem, ShippingAddress, ShippingRate, Product,
                         ProductVariant, PaymentLink)
 from app.helpers import get_cart_items, get_cart_subtotal, generate_order_number
+from app.services.visits import track_event
 
 checkout_bp = Blueprint('checkout', __name__)
 
@@ -180,6 +181,7 @@ def confirm_order():
                 product.stock_quantity = max(0, product.stock_quantity - qty)
 
     db.session.commit()
+    track_event('order', order_total=order.total)
 
     session.pop('cart', None)
     session.pop('pending_payment_intent', None)

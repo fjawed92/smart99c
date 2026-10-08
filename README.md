@@ -94,6 +94,23 @@ Set these in Render → Environment (then the site restarts):
 This uses IzyOps' `/api/v2/products` and `/api/v2/catalog/facets`, read-only.
 Costs are shown in the admin screen only, never to shoppers.
 
+## Visitor analytics
+
+Admin → **Visitors** shows who visits the store website: visitors per day,
+busiest hours and days, where people come from (Google, Facebook, …), phone
+vs computer, most viewed products, what shoppers search for (and searches
+that found nothing), and how many go from visit → cart → order. A short
+"What this means for the store" box sums it up.
+
+- Built in, no Google account needed. It stores a random visitor id in the
+  shopper's session cookie; no IP address, name or email is stored.
+- Admins, bots and search-engine crawlers are not counted.
+- Records older than about 13 months are cleared on each start.
+- To see where printed flyers or social posts bring people from, share links
+  like `https://smart99c.com/?utm_source=flyer`.
+- Optional: paste a Google Analytics ID (`G-…`) in Admin → Settings to also
+  send visits to Google Analytics.
+
 ## Store details
 
 Address, phone, restock day and pickup time live in `app/store.py`.

@@ -112,6 +112,20 @@
         </div>
       </div>
 
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 pt-3">
+          <h6 class="fw-700 mb-0">Google Analytics (optional)</h6>
+        </div>
+        <div class="card-body">
+          <label class="form-label">Measurement ID</label>
+          <input type="text" name="ga_measurement_id" class="form-control"
+                 value="{{ settings.get('ga_measurement_id', '') }}"
+                 placeholder="G-XXXXXXXXXX" />
+          <small class="text-muted">The built-in <a href="{{ url_for('admin.visitors') }}">Visitors</a> page already tracks your shoppers.
+            Paste an ID here only if you also want Google Analytics. Leave blank to keep it off.</small>
+        </div>
+      </div>
+
       <div class="text-end">
         <button type="submit" class="btn btn-primary btn-lg">
           <i class="bi bi-check-lg me-2"></i>Save Settings
