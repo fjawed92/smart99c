@@ -265,14 +265,14 @@ def orders_export():
     ws.title = 'Orders'
 
     header = ['Order #', 'Date', 'Status', 'Customer', 'Email', 'Phone',
-              'Items', 'Pickup / Delivery', 'Subtotal', 'Tax', 'Shipping', 'Total', 'Payment Intent']
+              'Items', 'Pickup / Delivery', 'Subtotal', 'Tax', 'Shipping', 'Service Fee', 'Total', 'Payment Intent']
     for i, h in enumerate(header, start=1):
         c = ws.cell(row=1, column=i, value=h)
         c.font = Font(bold=True, color='FFFFFF')
         c.fill = PatternFill('solid', fgColor='E8334A')
         c.alignment = Alignment(horizontal='left', vertical='center')
 
-    widths = [14, 18, 12, 24, 28, 16, 50, 30, 10, 10, 11, 10, 32]
+    widths = [14, 18, 12, 24, 28, 16, 50, 30, 10, 10, 11, 12, 10, 32]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
 
@@ -294,6 +294,7 @@ def orders_export():
             float(o.subtotal or 0),
             float(o.tax or 0),
             float(o.shipping_cost or 0),
+            float(o.service_fee or 0),
             float(o.total or 0),
             o.stripe_payment_intent_id or '',
         ])
@@ -991,6 +992,9 @@ def settings():
             'store_hours',
             'tax_rate',
             'free_shipping_threshold',
+            'service_fee_active',
+            'service_fee_percent',
+            'service_fee_fixed',
             'facebook_url',
             'instagram_url',
             'tiktok_url',

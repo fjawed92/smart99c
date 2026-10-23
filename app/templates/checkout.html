@@ -103,6 +103,9 @@
                     {% if rate.estimated_days %}
                     <br><span class="text-muted small">{{ rate.estimated_days }}</span>
                     {% endif %}
+                    {% if fee_active and 'pickup' in rate.name|lower %}
+                    <br><span class="badge bg-success-subtle text-success">No service fee</span>
+                    {% endif %}
                   </div>
                   <span class="fw-700 text-primary">
                     {% if rate.price == 0 %}FREE{% else %}${{ "%.2f"|format(rate.price) }}{% endif %}
@@ -169,6 +172,13 @@
               <span>Tax ({{ "%.2f"|format(8.875) }}%)</span>
               <strong id="summaryTax">${{ "%.2f"|format(tax) }}</strong>
             </div>
+            <div class="d-flex justify-content-between mb-1 d-none" id="summaryFeeRow">
+              <span>Online service fee</span>
+              <strong id="summaryFee">$0.00</strong>
+            </div>
+            <p class="text-muted small mb-2 d-none" id="summaryFeeNote">
+              Covers online card processing. Choose store pickup for no service fee.
+            </p>
             <hr />
             <div class="d-flex justify-content-between align-items-center">
               <strong class="fs-5">Total</strong>
@@ -203,6 +213,10 @@ async function initStripe(shippingRateId) {
   document.getElementById('summaryShipping').textContent = data.shipping === 0 ? 'FREE' : '$' + data.shipping.toFixed(2);
   document.getElementById('summaryTax').textContent = '$' + data.tax.toFixed(2);
   document.getElementById('summaryTotal').textContent = '$' + data.total.toFixed(2);
+  const fee = data.service_fee || 0;
+  document.getElementById('summaryFee').textContent = '$' + fee.toFixed(2);
+  document.getElementById('summaryFeeRow').classList.toggle('d-none', fee === 0);
+  document.getElementById('summaryFeeNote').classList.toggle('d-none', fee === 0);
 
   if (!stripe) stripe = Stripe(STRIPE_PUBLIC_KEY);
 

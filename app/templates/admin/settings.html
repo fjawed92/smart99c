@@ -52,6 +52,39 @@
 
       <div class="card border-0 shadow-sm mb-4">
         <div class="card-header bg-white border-0 pt-3">
+          <h6 class="fw-700 mb-0">Online Service Fee</h6>
+        </div>
+        <div class="card-body">
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="service_fee_active" name="service_fee_active" {% if settings.get('service_fee_active', '1') == '1' %}checked{% endif %}>
+            <label class="form-check-label" for="service_fee_active">Charge customers an online service fee to cover Stripe's card fee</label>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Stripe percent fee</label>
+              <div class="input-group">
+                <input type="number" name="service_fee_percent" class="form-control"
+                       value="{{ settings.get('service_fee_percent', '2.9') }}"
+                       step="0.01" min="0" max="10" placeholder="2.9" />
+                <span class="input-group-text">%</span>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Stripe fixed fee per payment</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" name="service_fee_fixed" class="form-control"
+                       value="{{ settings.get('service_fee_fixed', '0.30') }}"
+                       step="0.01" min="0" max="5" placeholder="0.30" />
+              </div>
+            </div>
+          </div>
+          <small class="text-muted d-block mt-2">Match these to your Stripe pricing (standard is 2.9% + $0.30). The fee is worked out so you receive your full order total after Stripe's cut. Store pickup orders never pay it.</small>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 pt-3">
           <h6 class="fw-700 mb-0">Store Hours</h6>
         </div>
         <div class="card-body">

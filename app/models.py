@@ -212,6 +212,10 @@ class ProductImage(db.Model):
         return f'<ProductImage {self.product_id} variant={self.variant_id} primary={self.is_primary}>'
 
 
+def is_pickup_option(name):
+    return 'pickup' in (name or '').lower()
+
+
 class Order(db.Model):
     __tablename__ = 'orders'
 
@@ -229,6 +233,7 @@ class Order(db.Model):
     stripe_charge_id = db.Column(db.String(255))
     stripe_livemode = db.Column(db.Boolean)
     shipping_method = db.Column(db.String(100))
+    service_fee = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -244,7 +249,7 @@ class Order(db.Model):
         if not self.shipping_method:
             # Older orders: a paid delivery fee means it was delivery.
             return False if self.shipping_cost and self.shipping_cost > 0 else None
-        return 'pickup' in self.shipping_method.lower()
+        return is_pickup_option(self.shipping_method)
 
     @property
     def fulfillment_label(self):

@@ -9,10 +9,21 @@ from datetime import datetime
 from app.extensions import db
 from app.models import (Order, OrderItem, ShippingAddress, ShippingRate, Product,
                         ProductVariant, PaymentLink)
-from app.helpers import get_cart_items, get_cart_subtotal, generate_order_number
+from app.helpers import (get_cart_items, get_cart_subtotal, generate_order_number,
+                         service_fee_for, get_site_setting)
 from app.services.visits import track_event
 
 checkout_bp = Blueprint('checkout', __name__)
+
+
+def _order_totals(rate):
+    subtotal = get_cart_subtotal()
+    tax_rate = Decimal(str(current_app.config.get('TAX_RATE', 0.08875)))
+    tax = subtotal * tax_rate
+    shipping_cost = rate.price if rate else Decimal('0')
+    fee = service_fee_for(subtotal + tax + shipping_cost, rate)
+    total = subtotal + tax + shipping_cost + fee
+    return subtotal, tax, shipping_cost, fee, total
 
 
 class CheckoutForm(FlaskForm):
@@ -55,7 +66,8 @@ def checkout():
                            items=items,
                            subtotal=subtotal,
                            tax=tax,
-                           shipping_rates=shipping_rates)
+                           shipping_rates=shipping_rates,
+                           fee_active=get_site_setting('service_fee_active', '1') == '1')
 
 
 @checkout_bp.route('/checkout/create-payment-intent', methods=['POST'])
@@ -68,18 +80,8 @@ def create_payment_intent():
     if not items:
         return jsonify({'error': 'Cart is empty'}), 400
 
-    subtotal = get_cart_subtotal()
-    tax_rate = Decimal(str(current_app.config.get('TAX_RATE', 0.08875)))
-    tax = subtotal * tax_rate
-
-    shipping_cost = Decimal('0')
-    rate = None
-    if shipping_rate_id:
-        rate = ShippingRate.query.get(int(shipping_rate_id))
-        if rate:
-            shipping_cost = rate.price
-
-    total = subtotal + tax + shipping_cost
+    rate = ShippingRate.query.get(int(shipping_rate_id)) if shipping_rate_id else None
+    subtotal, tax, shipping_cost, fee, total = _order_totals(rate)
     amount_cents = int(total * 100)
 
     try:
@@ -91,6 +93,7 @@ def create_payment_intent():
                 'subtotal': str(subtotal),
                 'tax': str(tax),
                 'shipping': str(shipping_cost),
+                'service_fee': str(fee),
                 'delivery_option': rate.name if rate else '',
             }
         )
@@ -99,6 +102,7 @@ def create_payment_intent():
                         'subtotal': float(subtotal),
                         'tax': float(tax),
                         'shipping': float(shipping_cost),
+                        'service_fee': float(fee),
                         'total': float(total)})
     except stripe.error.StripeError as e:
         return jsonify({'error': str(e.user_message)}), 400
@@ -118,16 +122,8 @@ def confirm_order():
     if not items:
         return jsonify({'error': 'Cart is empty'}), 400
 
-    subtotal = get_cart_subtotal()
-    tax_rate = Decimal(str(current_app.config.get('TAX_RATE', 0.08875)))
-    tax = subtotal * tax_rate
-    shipping_cost = Decimal('0')
-
     rate = ShippingRate.query.get(shipping_rate_id) if shipping_rate_id else None
-    if rate:
-        shipping_cost = rate.price
-
-    total = subtotal + tax + shipping_cost
+    subtotal, tax, shipping_cost, fee, total = _order_totals(rate)
 
     # Ask Stripe whether this payment really went through before saving an order.
     if not payment_intent_id:
@@ -159,6 +155,7 @@ def confirm_order():
         subtotal=subtotal,
         tax=tax,
         shipping_cost=shipping_cost,
+        service_fee=fee,
         total=total,
         stripe_payment_intent_id=payment_intent_id,
         stripe_charge_id=charge_id,

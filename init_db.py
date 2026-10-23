@@ -37,6 +37,7 @@ EXTRA_COLUMNS = [
     ('products', 'izyops_product_id', 'INTEGER'),
     ('orders', 'shipping_method', 'VARCHAR(100)'),
     ('orders', 'stripe_livemode', 'BOOLEAN'),
+    ('orders', 'service_fee', 'NUMERIC(10, 2) NOT NULL DEFAULT 0'),
 ]
 
 

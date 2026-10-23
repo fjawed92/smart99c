@@ -49,6 +49,12 @@
                 <span class="text-muted">Tax</span>
                 <span>${{ "%.2f"|format(order.tax) }}</span>
               </div>
+              {% if order.service_fee and order.service_fee > 0 %}
+              <div class="d-flex justify-content-between mb-2">
+                <span class="text-muted">Online service fee</span>
+                <span>${{ "%.2f"|format(order.service_fee) }}</span>
+              </div>
+              {% endif %}
               <hr class="my-2" />
               <div class="d-flex justify-content-between">
                 <strong>Total</strong>
