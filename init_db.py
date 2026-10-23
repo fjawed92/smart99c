@@ -37,6 +37,12 @@ EXTRA_COLUMNS = [
     ('products', 'izyops_product_id', 'INTEGER'),
     ('orders', 'shipping_method', 'VARCHAR(100)'),
     ('orders', 'stripe_livemode', 'BOOLEAN'),
+    ('orders', 'service_fee', 'NUMERIC(10, 2) NOT NULL DEFAULT 0'),
+    ('orders', 'payment_method', "VARCHAR(20) NOT NULL DEFAULT 'card'"),
+    ('orders', 'pickup_deadline', 'TIMESTAMP'),
+    ('orders', 'ready_at', 'TIMESTAMP'),
+    ('orders', 'picked_up_at', 'TIMESTAMP'),
+    ('orders', 'reminder_sent_at', 'TIMESTAMP'),
 ]
 
 

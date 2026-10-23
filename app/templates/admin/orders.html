@@ -3,40 +3,81 @@
 {% block page_title %}Orders{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-end mb-3">
+<div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+  <form method="GET" class="d-flex gap-2 flex-grow-1" style="max-width:420px">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <input type="search" name="q" class="form-control" placeholder="Order #, name, email or phone" value="{{ search }}" aria-label="Search orders">
+    <button type="submit" class="btn btn-outline-primary"><i class="bi bi-search"></i></button>
+  </form>
   <a href="{{ url_for('admin.orders_export') }}" class="btn btn-outline-primary">
     <i class="bi bi-file-earmark-spreadsheet me-2"></i>Export to Excel
   </a>
 </div>
 
-<!-- Filters -->
-<div class="card border-0 shadow-sm mb-4">
-  <div class="card-body">
-    <form method="GET" class="row g-2 align-items-end">
-      <div class="col-md-4">
-        <input type="text" name="q" class="form-control" placeholder="Order # or customer email…" value="{{ search }}">
-      </div>
-      <div class="col-md-2">
-        <select name="status" class="form-select">
-          <option value="">All Statuses</option>
-          {% for s in ['pending','processing','shipped','delivered','cancelled','refunded'] %}
-          <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s|title }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-md-2">
-        <input type="date" name="date_from" class="form-control" value="{{ request.args.get('date_from','') }}">
-      </div>
-      <div class="col-md-2">
-        <input type="date" name="date_to" class="form-control" value="{{ request.args.get('date_to','') }}">
-      </div>
-      <div class="col-md-auto">
-        <button type="submit" class="btn btn-outline-primary">Filter</button>
-        <a href="{{ url_for('admin.orders') }}" class="btn btn-outline-secondary ms-1">Reset</a>
-      </div>
-    </form>
+<!-- Summary -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body">
+      <div class="small fw-700 text-muted">Cash to collect</div>
+      <div class="fs-3 fw-800">${{ "%.2f"|format(summary.cash_due) }}</div>
+      <div class="small text-muted">from {{ summary.cash_count }} pickup{{ 's' if summary.cash_count != 1 }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body">
+      <div class="small fw-700 text-muted">Need packing</div>
+      <div class="fs-3 fw-800">{{ summary.to_pack }}</div>
+      <div class="small text-muted">new orders not marked ready</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <a href="{{ url_for('admin.orders', tab='late') }}" class="text-decoration-none">
+    <div class="card border-0 shadow-sm h-100 {% if summary.late %}bg-danger-subtle{% endif %}"><div class="card-body">
+      <div class="small fw-700 {% if summary.late %}text-danger-emphasis{% else %}text-muted{% endif %}">Past pickup deadline</div>
+      <div class="fs-3 fw-800 {% if summary.late %}text-danger-emphasis{% else %}text-body{% endif %}">{{ summary.late }}</div>
+      <div class="small {% if summary.late %}text-danger-emphasis{% else %}text-muted{% endif %}">{% if summary.late %}decide: no-show or extend{% else %}all on time{% endif %}</div>
+    </div></div>
+    </a>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body">
+      <div class="small fw-700 text-muted">Paid online today</div>
+      <div class="fs-3 fw-800">${{ "%.2f"|format(summary.paid_today) }}</div>
+      <div class="small text-muted">{{ summary.paid_today_count }} order{{ 's' if summary.paid_today_count != 1 }}</div>
+    </div></div>
   </div>
 </div>
+
+<!-- Tabs -->
+<div class="d-flex flex-wrap gap-2 mb-3" role="tablist" aria-label="Order groups">
+  {% for key, label in tabs %}
+  <a href="{{ url_for('admin.orders', tab=key, q=search or None) }}" role="tab" aria-selected="{{ 'true' if tab == key else 'false' }}"
+     class="btn rounded-pill fw-700 {% if tab == key %}{% if key == 'late' %}btn-danger{% else %}btn-primary{% endif %}{% else %}{% if key == 'late' and tab_counts[key] %}btn-outline-danger{% else %}btn-outline-secondary{% endif %}{% endif %}">
+    {{ label }} ({{ tab_counts[key] }})
+  </a>
+  {% endfor %}
+</div>
+
+{% if tab == 'all' %}
+<form method="GET" class="row g-2 align-items-end mb-3">
+  <input type="hidden" name="tab" value="all">
+  <input type="hidden" name="q" value="{{ search }}">
+  <div class="col-md-3">
+    <select name="status" class="form-select" aria-label="Status">
+      <option value="">All statuses</option>
+      {% for s in ['pending','processing','ready','picked_up','shipped','delivered','no_show','cancelled','refunded'] %}
+      <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s.replace('_', ' ')|title }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-3"><input type="date" name="date_from" class="form-control" aria-label="From" value="{{ request.args.get('date_from','') }}"></div>
+  <div class="col-md-3"><input type="date" name="date_to" class="form-control" aria-label="To" value="{{ request.args.get('date_to','') }}"></div>
+  <div class="col-md-auto">
+    <button type="submit" class="btn btn-outline-primary">Filter</button>
+    <a href="{{ url_for('admin.orders', tab='all') }}" class="btn btn-outline-secondary ms-1">Reset</a>
+  </div>
+</form>
+{% endif %}
 
 <div class="card border-0 shadow-sm">
   <div class="card-body p-0">
@@ -44,42 +85,90 @@
       <table class="table table-hover align-middle mb-0">
         <thead class="table-light">
           <tr>
-            <th>Order #</th>
+            <th>Order</th>
             <th>Customer</th>
-            <th>Date</th>
-            <th>Pickup / Delivery</th>
-            <th>Items</th>
+            <th>Type</th>
+            <th>{% if tab in ('pickup', 'late') %}Pickup deadline{% else %}Status{% endif %}</th>
             <th>Total</th>
-            <th>Status</th>
-            <th></th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {% for order in orders %}
+          {% set addr = order.shipping_address %}
           <tr>
-            <td class="fw-600">{{ order.order_number }}</td>
             <td>
-              {% if order.shipping_address %}
-              <div>{{ order.shipping_address.full_name }}</div>
-              <small class="text-muted">{{ order.shipping_address.email }}</small>
+              <a href="{{ url_for('admin.order_detail', order_id=order.id) }}" class="fw-800 text-decoration-none">{{ order.order_number }}</a>
+              <div class="small text-muted">{{ order.created_at|local_time('%b %-d, %-I:%M %p') }}</div>
+            </td>
+            <td>
+              {% if addr %}
+              <div class="fw-700">{{ addr.full_name }}</div>
+              <small class="text-muted">{{ addr.phone or addr.email }} · {{ order.items|length }} item{{ 's' if order.items|length != 1 }}</small>
               {% elif order.user %}
-              <div>{{ order.user.full_name }}</div>
+              <div class="fw-700">{{ order.user.full_name }}</div>
               <small class="text-muted">{{ order.user.email }}</small>
               {% else %}
               <span class="text-muted">Guest</span>
               {% endif %}
             </td>
-            <td class="text-muted">{{ order.created_at.strftime('%b %d, %Y') }}<br><small>{{ order.created_at.strftime('%I:%M %p') }}</small></td>
-            <td>{% if order.is_pickup %}<span class="badge bg-success">Pickup</span>{% elif order.is_pickup is none %}<span class="badge bg-warning text-dark">Not recorded</span>{% else %}<span class="badge bg-primary">Delivery</span>{% endif %}</td>
-            <td>{{ order.items|length }}</td>
-            <td class="fw-600">${{ "%.2f"|format(order.total) }}</td>
-            <td><span class="badge status-{{ order.status }}">{{ order.status|title }}</span></td>
             <td>
+              {% if order.is_pickup %}<span class="badge rounded-pill text-bg-info">Pickup</span>{% elif order.is_pickup is none %}<span class="badge rounded-pill text-bg-warning">Not recorded</span>{% else %}<span class="badge rounded-pill text-bg-secondary">Delivery</span>{% endif %}
+              <br>
+              {% if order.is_cash %}
+                {% if order.status == 'picked_up' %}<span class="badge rounded-pill text-bg-success mt-1">Cash paid</span>
+                {% elif order.is_open %}<span class="badge rounded-pill text-bg-warning mt-1">Cash due</span>
+                {% else %}<span class="badge rounded-pill text-bg-light mt-1">Not paid</span>{% endif %}
+              {% else %}<span class="badge rounded-pill text-bg-success mt-1">Paid online</span>{% endif %}
+            </td>
+            <td>
+              {% if order.is_cash and order.is_open and order.pickup_deadline %}
+                <div class="{% if order.is_overdue %}text-danger fw-800{% endif %}">{{ order.time_left_label }}</div>
+                <small class="text-muted">by {{ order.pickup_deadline|local_time('%a %-I:%M %p') }}</small>
+              {% else %}
+                <span class="badge status-{{ order.status }}">{{ order.status_label }}</span>
+              {% endif %}
+            </td>
+            <td class="fw-700">${{ "%.2f"|format(order.total) }}</td>
+            <td>
+              {% if order.is_open %}
+              <div class="d-flex flex-wrap gap-1">
+                {% if order.is_pickup %}
+                  {% if order.status == 'processing' %}
+                  <form method="POST" action="{{ url_for('admin.order_pickup_action', order_id=order.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="next" value="{{ request.full_path }}">
+                    <button name="action" value="ready" class="btn btn-sm btn-outline-primary fw-700">Ready</button>
+                  </form>
+                  {% endif %}
+                  <form method="POST" action="{{ url_for('admin.order_pickup_action', order_id=order.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="next" value="{{ request.full_path }}">
+                    <button name="action" value="picked_up" class="btn btn-sm btn-primary fw-700">Picked up</button>
+                  </form>
+                  {% if order.is_cash %}
+                  <form method="POST" action="{{ url_for('admin.order_pickup_action', order_id=order.id) }}"
+                        onsubmit="return confirm('Mark {{ order.order_number }} as a no-show and put the items back in stock?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="next" value="{{ request.full_path }}">
+                    <button name="action" value="no_show" class="btn btn-sm btn-outline-danger fw-700">No-show</button>
+                  </form>
+                  {% endif %}
+                {% elif order.status != 'pending' %}
+                  <form method="POST" action="{{ url_for('admin.order_pickup_action', order_id=order.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="next" value="{{ request.full_path }}">
+                    <button name="action" value="delivered" class="btn btn-sm btn-primary fw-700">Delivered</button>
+                  </form>
+                {% endif %}
+              </div>
+              {% else %}
               <a href="{{ url_for('admin.order_detail', order_id=order.id) }}" class="btn btn-sm btn-outline-secondary">View</a>
+              {% endif %}
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="8" class="text-center py-5 text-muted">No orders found</td></tr>
+          <tr><td colspan="6" class="text-center py-5 text-muted">Nothing here right now.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -91,14 +180,14 @@
 <nav class="mt-4">
   <ul class="pagination justify-content-center">
     {% if pagination.has_prev %}
-    <li class="page-item"><a class="page-link" href="{{ url_for('admin.orders', page=pagination.prev_num, q=search, status=status) }}"><i class="bi bi-chevron-left"></i></a></li>
+    <li class="page-item"><a class="page-link" href="{{ url_for('admin.orders', page=pagination.prev_num, q=search, status=status, tab=tab) }}" aria-label="Previous"><i class="bi bi-chevron-left"></i></a></li>
     {% endif %}
     {% for p in pagination.iter_pages() %}
-      {% if p %}<li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" href="{{ url_for('admin.orders', page=p, q=search, status=status) }}">{{ p }}</a></li>
+      {% if p %}<li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" href="{{ url_for('admin.orders', page=p, q=search, status=status, tab=tab) }}">{{ p }}</a></li>
       {% else %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
     {% endfor %}
     {% if pagination.has_next %}
-    <li class="page-item"><a class="page-link" href="{{ url_for('admin.orders', page=pagination.next_num, q=search, status=status) }}"><i class="bi bi-chevron-right"></i></a></li>
+    <li class="page-item"><a class="page-link" href="{{ url_for('admin.orders', page=pagination.next_num, q=search, status=status, tab=tab) }}" aria-label="Next"><i class="bi bi-chevron-right"></i></a></li>
     {% endif %}
   </ul>
 </nav>

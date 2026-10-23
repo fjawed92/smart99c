@@ -99,6 +99,30 @@ def get_site_setting(key, default=''):
         return default
 
 
+def service_fee_for(amount, rate=None):
+    """Online service fee that covers Stripe's card fee on `amount`.
+
+    Grossed up so that after Stripe takes its percent + fixed fee (on the
+    whole charge, fee included) the store still receives `amount`.
+    Store-pickup orders pay no fee.
+    """
+    from decimal import Decimal, ROUND_UP, InvalidOperation
+    from app.models import is_pickup_option
+    if get_site_setting('service_fee_active', '1') != '1':
+        return Decimal('0.00')
+    if rate is None or is_pickup_option(rate.name) or amount <= 0:
+        return Decimal('0.00')
+    try:
+        pct = Decimal(get_site_setting('service_fee_percent', '') or '2.9') / 100
+        fixed = Decimal(get_site_setting('service_fee_fixed', '') or '0.30')
+    except InvalidOperation:
+        pct, fixed = Decimal('0.029'), Decimal('0.30')
+    if pct < 0 or pct >= 1 or fixed < 0:
+        return Decimal('0.00')
+    gross = (Decimal(amount) + fixed) / (1 - pct)
+    return (gross - Decimal(amount)).quantize(Decimal('0.01'), rounding=ROUND_UP)
+
+
 def generate_slug(text):
     try:
         from slugify import slugify
