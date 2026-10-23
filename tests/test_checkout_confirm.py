@@ -84,24 +84,21 @@ def test_old_order_without_option_is_flagged(db):
 
 def test_fee_covers_stripe_cut(app):
     from app.helpers import service_fee_for
-    delivery = ShippingRate(name='Local delivery', price=Decimal('4.99'))
     amount = Decimal('20.00')
-    fee = service_fee_for(amount, delivery)
+    fee = service_fee_for(amount)
     charged = amount + fee
     stripe_cut = charged * Decimal('0.029') + Decimal('0.30')
     # Store keeps at least the order amount, and never more than a cent over.
     assert amount <= charged - stripe_cut < amount + Decimal('0.01')
 
 
-def test_no_fee_for_pickup_or_when_turned_off(app, db):
+def test_no_fee_for_cash_or_when_turned_off(app, db):
     from app.helpers import service_fee_for, set_site_setting
-    pickup = ShippingRate(name='Store pickup (West Babylon)', price=Decimal('0'))
-    delivery = ShippingRate(name='Local delivery', price=Decimal('4.99'))
-    assert service_fee_for(Decimal('20'), pickup) == 0
-    assert service_fee_for(Decimal('20'), delivery) > 0
+    assert service_fee_for(Decimal('20'), paid_by_card=False) == 0
+    assert service_fee_for(Decimal('20')) > 0
     set_site_setting('service_fee_active', '')
     db.session.commit()
-    assert service_fee_for(Decimal('20'), delivery) == 0
+    assert service_fee_for(Decimal('20')) == 0
 
 
 def test_delivery_order_charges_and_saves_fee(client, db, simple_product, monkeypatch):
@@ -128,7 +125,9 @@ def test_delivery_order_charges_and_saves_fee(client, db, simple_product, monkey
     assert order.total == order.subtotal + order.tax + order.shipping_cost + order.service_fee
 
 
-def test_pickup_order_has_no_fee(client, db, simple_product, monkeypatch):
+def test_card_pickup_order_pays_fee(client, db, simple_product, monkeypatch):
     pickup = _setup(client, db, simple_product, monkeypatch)
     _confirm(client, pickup.id)
-    assert Order.query.one().service_fee == 0
+    order = Order.query.one()
+    assert order.service_fee > 0
+    assert order.total == order.subtotal + order.tax + order.service_fee

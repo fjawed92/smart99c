@@ -99,18 +99,17 @@ def get_site_setting(key, default=''):
         return default
 
 
-def service_fee_for(amount, rate=None):
+def service_fee_for(amount, paid_by_card=True):
     """Online service fee that covers Stripe's card fee on `amount`.
 
     Grossed up so that after Stripe takes its percent + fixed fee (on the
     whole charge, fee included) the store still receives `amount`.
-    Store-pickup orders pay no fee.
+    Every card payment pays it; cash paid at pickup does not.
     """
     from decimal import Decimal, ROUND_UP, InvalidOperation
-    from app.models import is_pickup_option
     if get_site_setting('service_fee_active', '1') != '1':
         return Decimal('0.00')
-    if rate is None or is_pickup_option(rate.name) or amount <= 0:
+    if not paid_by_card or amount <= 0:
         return Decimal('0.00')
     try:
         pct = Decimal(get_site_setting('service_fee_percent', '') or '2.9') / 100
