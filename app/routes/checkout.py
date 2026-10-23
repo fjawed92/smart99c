@@ -17,12 +17,12 @@ from app.services import pickup
 checkout_bp = Blueprint('checkout', __name__)
 
 
-def _order_totals(rate):
+def _order_totals(rate, paid_by_card=True):
     subtotal = get_cart_subtotal()
     tax_rate = Decimal(str(current_app.config.get('TAX_RATE', 0.08875)))
     tax = subtotal * tax_rate
     shipping_cost = rate.price if rate else Decimal('0')
-    fee = service_fee_for(subtotal + tax + shipping_cost, rate)
+    fee = service_fee_for(subtotal + tax + shipping_cost, paid_by_card)
     total = subtotal + tax + shipping_cost + fee
     return subtotal, tax, shipping_cost, fee, total
 
@@ -265,7 +265,7 @@ def reserve_cash():
     rate = _pickup_rate()
     if rate is None:
         return jsonify({'error': 'Store pickup is not available right now.'}), 400
-    totals = _order_totals(rate)
+    totals = _order_totals(rate, paid_by_card=False)
     settings = pickup.cash_settings()
     blocked = pickup.cash_block_reason(totals[-1], data.get('email', ''), data.get('phone', ''),
                                        settings=settings)

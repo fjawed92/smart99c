@@ -93,8 +93,8 @@
                     {% if rate.estimated_days %}
                     <br><span class="text-muted small">{{ rate.estimated_days }}</span>
                     {% endif %}
-                    {% if fee_active and is_pickup %}
-                    <br><span class="badge bg-success-subtle text-success">No service fee</span>
+                    {% if fee_active %}
+                    <br><span class="text-muted small">+ online service fee for card payments</span>
                     {% endif %}
                   </div>
                   <span class="fw-700 text-primary">
@@ -215,7 +215,7 @@
               <strong id="summaryFee">$0.00</strong>
             </div>
             <p class="text-muted small mb-2 d-none" id="summaryFeeNote">
-              Covers online card processing. Choose store pickup for no service fee.
+              Covers online card processing.{% if cash_option and not cash_option.blocked %} Pay cash at pickup for no service fee.{% endif %}
             </p>
             <hr />
             <div class="d-flex justify-content-between align-items-center">
