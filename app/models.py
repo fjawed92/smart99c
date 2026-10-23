@@ -227,6 +227,8 @@ class Order(db.Model):
     total = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     stripe_payment_intent_id = db.Column(db.String(255))
     stripe_charge_id = db.Column(db.String(255))
+    stripe_livemode = db.Column(db.Boolean)
+    shipping_method = db.Column(db.String(100))
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -235,6 +237,23 @@ class Order(db.Model):
     items = db.relationship('OrderItem', back_populates='order', cascade='all, delete-orphan')
     shipping_address = db.relationship('ShippingAddress', back_populates='order',
                                        uselist=False, cascade='all, delete-orphan')
+
+    @property
+    def is_pickup(self):
+        """True / False when the delivery option was saved, None for older orders."""
+        if not self.shipping_method:
+            # Older orders: a paid delivery fee means it was delivery.
+            return False if self.shipping_cost and self.shipping_cost > 0 else None
+        return 'pickup' in self.shipping_method.lower()
+
+    @property
+    def fulfillment_label(self):
+        if self.shipping_method:
+            return self.shipping_method
+        # Orders placed before the option was saved: only the price is known.
+        if self.shipping_cost and self.shipping_cost > 0:
+            return 'Delivery (option not recorded)'
+        return 'Pickup or free delivery (not recorded)'
 
     def __repr__(self):
         return f'<Order {self.order_number}>'

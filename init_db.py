@@ -35,6 +35,8 @@ EXTRA_COLUMNS = [
     ('order_items', 'product_color', 'VARCHAR(60)'),
     ('products', 'upc', 'VARCHAR(120)'),
     ('products', 'izyops_product_id', 'INTEGER'),
+    ('orders', 'shipping_method', 'VARCHAR(100)'),
+    ('orders', 'stripe_livemode', 'BOOLEAN'),
 ]
 
 

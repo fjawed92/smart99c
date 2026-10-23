@@ -47,6 +47,7 @@
             <th>Order #</th>
             <th>Customer</th>
             <th>Date</th>
+            <th>Pickup / Delivery</th>
             <th>Items</th>
             <th>Total</th>
             <th>Status</th>
@@ -69,6 +70,7 @@
               {% endif %}
             </td>
             <td class="text-muted">{{ order.created_at.strftime('%b %d, %Y') }}<br><small>{{ order.created_at.strftime('%I:%M %p') }}</small></td>
+            <td>{% if order.is_pickup %}<span class="badge bg-success">Pickup</span>{% elif order.is_pickup is none %}<span class="badge bg-warning text-dark">Not recorded</span>{% else %}<span class="badge bg-primary">Delivery</span>{% endif %}</td>
             <td>{{ order.items|length }}</td>
             <td class="fw-600">${{ "%.2f"|format(order.total) }}</td>
             <td><span class="badge status-{{ order.status }}">{{ order.status|title }}</span></td>
@@ -77,7 +79,7 @@
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="7" class="text-center py-5 text-muted">No orders found</td></tr>
+          <tr><td colspan="8" class="text-center py-5 text-muted">No orders found</td></tr>
           {% endfor %}
         </tbody>
       </table>
