@@ -8,10 +8,11 @@ from wtforms import StringField, SelectField, validators
 from datetime import datetime
 from app.extensions import db
 from app.models import (Order, OrderItem, ShippingAddress, ShippingRate, Product,
-                        ProductVariant, PaymentLink)
+                        ProductVariant, PaymentLink, is_pickup_option)
 from app.helpers import (get_cart_items, get_cart_subtotal, generate_order_number,
                          service_fee_for, get_site_setting)
 from app.services.visits import track_event
+from app.services import pickup
 
 checkout_bp = Blueprint('checkout', __name__)
 
@@ -24,6 +25,78 @@ def _order_totals(rate):
     fee = service_fee_for(subtotal + tax + shipping_cost, rate)
     total = subtotal + tax + shipping_cost + fee
     return subtotal, tax, shipping_cost, fee, total
+
+
+def _save_order(data, items, rate, totals, **fields):
+    """Save the order, its address and items, take the stock and empty the cart."""
+    subtotal, tax, shipping_cost, fee, total = totals
+    order = Order(
+        order_number=generate_order_number(),
+        user_id=current_user.id if current_user.is_authenticated else None,
+        subtotal=subtotal,
+        tax=tax,
+        shipping_cost=shipping_cost,
+        service_fee=fee,
+        total=total,
+        shipping_method=rate.name if rate else None,
+        **fields,
+    )
+    db.session.add(order)
+    db.session.flush()
+
+    address = ShippingAddress(
+        order_id=order.id,
+        first_name=data.get('first_name', ''),
+        last_name=data.get('last_name', ''),
+        email=data.get('email', ''),
+        phone=data.get('phone', ''),
+        address_line1=data.get('address_line1', '') or '',
+        address_line2=data.get('address_line2', '') or '',
+        city=data.get('city', '') or '',
+        state=data.get('state', '') or '',
+        zip_code=data.get('zip_code', '') or '',
+        country=data.get('country', 'US'),
+    )
+    db.session.add(address)
+
+    for item in items:
+        product = item['product']
+        variant = item.get('variant')
+        qty = item['quantity']
+        unit_price = item['unit_price']
+        order_item = OrderItem(
+            order_id=order.id,
+            product_id=product.id,
+            variant_id=variant.id if variant else None,
+            product_name=product.name,
+            product_sku=(variant.sku if variant and variant.sku else product.sku) or '',
+            product_color=variant.color_name if variant else None,
+            quantity=qty,
+            unit_price=unit_price,
+            total_price=unit_price * qty,
+        )
+        db.session.add(order_item)
+
+        if product.track_inventory:
+            if variant is not None:
+                variant.stock_quantity = max(0, variant.stock_quantity - qty)
+            else:
+                product.stock_quantity = max(0, product.stock_quantity - qty)
+
+    db.session.commit()
+    track_event('order', order_total=order.total)
+
+    session.pop('cart', None)
+    session.pop('pending_payment_intent', None)
+    return order
+
+
+def _pickup_rate():
+    for rate in ShippingRate.query.filter_by(is_active=True)\
+            .order_by(ShippingRate.sort_order, ShippingRate.price).all():
+        if is_pickup_option(rate.name):
+            return rate
+    return None
 
 
 class CheckoutForm(FlaskForm):
@@ -61,12 +134,27 @@ def checkout():
     tax_rate = Decimal(str(current_app.config.get('TAX_RATE', 0.08875)))
     tax = subtotal * tax_rate
 
+    # Pay-cash-at-pickup option (Admin → Settings).
+    cash = pickup.cash_settings()
+    pickup_rate = _pickup_rate()
+    cash_total = subtotal + tax + (pickup_rate.price if pickup_rate else 0)
+    cash_option = None
+    if cash['active'] and pickup_rate:
+        cash_option = {
+            'rate': pickup_rate,
+            'total': cash_total,
+            'hold_hours': cash['hold_hours'],
+            'deadline': pickup.format_local(pickup.pickup_deadline(settings=cash)),
+            'blocked': pickup.cash_block_reason(cash_total, settings=cash),
+        }
+
     return render_template('checkout.html',
                            form=form,
                            items=items,
                            subtotal=subtotal,
                            tax=tax,
                            shipping_rates=shipping_rates,
+                           cash_option=cash_option,
                            fee_active=get_site_setting('service_fee_active', '1') == '1')
 
 
@@ -148,69 +236,47 @@ def confirm_order():
         charge_id = intent.get('latest_charge')
         livemode = bool(intent.get('livemode'))
 
-    order = Order(
-        order_number=generate_order_number(),
-        user_id=current_user.id if current_user.is_authenticated else None,
-        status=status,
-        subtotal=subtotal,
-        tax=tax,
-        shipping_cost=shipping_cost,
-        service_fee=fee,
-        total=total,
-        stripe_payment_intent_id=payment_intent_id,
-        stripe_charge_id=charge_id,
-        stripe_livemode=livemode,
-        shipping_method=rate.name if rate else None,
-    )
-    db.session.add(order)
-    db.session.flush()
+    order = _save_order(data, items, rate, (subtotal, tax, shipping_cost, fee, total),
+                        status=status,
+                        stripe_payment_intent_id=payment_intent_id,
+                        stripe_charge_id=charge_id,
+                        stripe_livemode=livemode)
 
-    addr_data = data if not request.is_json else data
-    address = ShippingAddress(
-        order_id=order.id,
-        first_name=data.get('first_name', ''),
-        last_name=data.get('last_name', ''),
-        email=data.get('email', ''),
-        phone=data.get('phone', ''),
-        address_line1=data.get('address_line1', ''),
-        address_line2=data.get('address_line2', ''),
-        city=data.get('city', ''),
-        state=data.get('state', ''),
-        zip_code=data.get('zip_code', ''),
-        country=data.get('country', 'US'),
-    )
-    db.session.add(address)
+    return jsonify({'success': True, 'order_number': order.order_number,
+                    'redirect': url_for('checkout.order_confirmation',
+                                        order_number=order.order_number)})
 
-    for item in items:
-        product = item['product']
-        variant = item.get('variant')
-        qty = item['quantity']
-        unit_price = item['unit_price']
-        order_item = OrderItem(
-            order_id=order.id,
-            product_id=product.id,
-            variant_id=variant.id if variant else None,
-            product_name=product.name,
-            product_sku=(variant.sku if variant and variant.sku else product.sku) or '',
-            product_color=variant.color_name if variant else None,
-            quantity=qty,
-            unit_price=unit_price,
-            total_price=unit_price * qty,
-        )
-        db.session.add(order_item)
 
-        if product.track_inventory:
-            if variant is not None:
-                variant.stock_quantity = max(0, variant.stock_quantity - qty)
-            else:
-                product.stock_quantity = max(0, product.stock_quantity - qty)
+@checkout_bp.route('/checkout/reserve-cash', methods=['POST'])
+def reserve_cash():
+    """Pickup order paid in cash at the counter: no card, held until a deadline."""
+    data = request.get_json() or {}
+    items = get_cart_items()
+    if not items:
+        return jsonify({'error': 'Your cart is empty.'}), 400
 
-    db.session.commit()
-    track_event('order', order_total=order.total)
+    for field, label in (('first_name', 'first name'), ('last_name', 'last name'),
+                         ('email', 'email'), ('phone', 'phone number')):
+        if not (data.get(field) or '').strip():
+            return jsonify({'error': f'Please enter your {label}.'}), 400
+    if not data.get('agree_deadline'):
+        return jsonify({'error': 'Please confirm you can pick up before the deadline.'}), 400
 
-    session.pop('cart', None)
-    session.pop('pending_payment_intent', None)
+    rate = _pickup_rate()
+    if rate is None:
+        return jsonify({'error': 'Store pickup is not available right now.'}), 400
+    totals = _order_totals(rate)
+    settings = pickup.cash_settings()
+    blocked = pickup.cash_block_reason(totals[-1], data.get('email', ''), data.get('phone', ''),
+                                       settings=settings)
+    if blocked:
+        return jsonify({'error': blocked}), 400
 
+    order = _save_order(data, items, rate, totals,
+                        status='processing',
+                        payment_method='cash',
+                        pickup_deadline=pickup.pickup_deadline(settings=settings))
+    pickup.email_customer(order, 'reserved')
     return jsonify({'success': True, 'order_number': order.order_number,
                     'redirect': url_for('checkout.order_confirmation',
                                         order_number=order.order_number)})
@@ -219,7 +285,8 @@ def confirm_order():
 @checkout_bp.route('/order/confirmation/<order_number>')
 def order_confirmation(order_number):
     order = Order.query.filter_by(order_number=order_number).first_or_404()
-    return render_template('order_confirmation.html', order=order)
+    return render_template('order_confirmation.html', order=order,
+                           deadline=pickup.format_local(order.pickup_deadline))
 
 
 @checkout_bp.route('/stripe/webhook', methods=['POST'])

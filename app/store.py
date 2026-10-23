@@ -13,4 +13,9 @@ STORE = {
     'restock_label': 'Fridays at 4 PM',
     'free_delivery_over': 35,
     'pickup_time': 'about 1 hour',
+    # Opening hours by weekday (Monday=0) as (open hour, close hour), 24h clock.
+    # Cash-pickup holds end at closing time when they'd otherwise land overnight.
+    'open_hours': {0: (9, 21), 1: (9, 21), 2: (9, 21), 3: (9, 21),
+                   4: (9, 21), 5: (9, 21), 6: (10, 19)},
+    'timezone': 'America/New_York',
 }

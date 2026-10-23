@@ -63,7 +63,7 @@
                 <td class="fw-600">{{ order.order_number }}</td>
                 <td class="text-muted">{{ order.created_at.strftime('%b %d, %Y') }}</td>
                 <td class="fw-600">${{ "%.2f"|format(order.total) }}</td>
-                <td><span class="badge status-{{ order.status }}">{{ order.status|title }}</span></td>
+                <td><span class="badge status-{{ order.status }}">{{ order.status_label }}</span></td>
                 <td><a href="{{ url_for('orders.order_detail', order_number=order.order_number) }}" class="btn btn-sm btn-outline-primary">View</a></td>
               </tr>
               {% endfor %}

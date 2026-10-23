@@ -47,16 +47,80 @@
                      value="{{ form.email.data or '' }}" />
             </div>
             <div class="col-md-5">
-              <label class="form-label">Phone</label>
+              <label class="form-label">Phone <span id="phoneRequired" class="d-none">*</span></label>
               <input type="tel" class="form-control" name="phone" id="phone"
                      value="{{ form.phone.data or '' }}" />
             </div>
           </div>
         </div>
 
-        <!-- Shipping Address -->
+        <!-- Pickup or delivery -->
         <div class="checkout-section mb-4">
-          <h5 class="checkout-section-title"><i class="bi bi-geo-alt me-2"></i>Shipping Address</h5>
+          <h5 class="checkout-section-title"><i class="bi bi-bag-check me-2"></i>How do you want your order?</h5>
+          <div class="shipping-options" id="shippingOptions">
+            {% if cash_option %}
+            <label class="shipping-option {% if not cash_option.blocked %}selected{% endif %} {% if cash_option.blocked %}opacity-75{% endif %}">
+              <input type="radio" name="fulfillment" value="cash" class="shipping-radio"
+                     data-rate="{{ cash_option.rate.id }}" data-pickup="1" data-cash="1"
+                     {% if cash_option.blocked %}disabled{% else %}checked{% endif %} />
+              <div class="shipping-option-content">
+                <div class="d-flex justify-content-between align-items-start">
+                  <div>
+                    <strong>Pick up · Pay cash in store</strong>
+                    <br><span class="text-muted small">{{ cash_option.rate.estimated_days or 'Ready soon' }} · {{ store.address_short }}</span>
+                    {% if cash_option.blocked %}
+                    <br><span class="small text-danger">{{ cash_option.blocked }}</span>
+                    {% else %}
+                    <br><span class="badge bg-success-subtle text-success">No service fee · No card needed</span>
+                    {% endif %}
+                  </div>
+                  <span class="fw-700 text-primary">FREE</span>
+                </div>
+              </div>
+            </label>
+            {% endif %}
+            {% for rate in shipping_rates %}
+            {% set first_choice = loop.first and not (cash_option and not cash_option.blocked) %}
+            {% set is_pickup = 'pickup' in rate.name|lower %}
+            <label class="shipping-option {% if first_choice %}selected{% endif %}">
+              <input type="radio" name="fulfillment" value="{{ rate.id }}" class="shipping-radio"
+                     data-rate="{{ rate.id }}" data-pickup="{{ '1' if is_pickup else '' }}"
+                     {% if first_choice %}checked{% endif %} />
+              <div class="shipping-option-content">
+                <div class="d-flex justify-content-between align-items-start">
+                  <div>
+                    <strong>{% if is_pickup and cash_option %}Pick up · Pay now by card{% else %}{{ rate.name }}{% endif %}</strong>
+                    {% if rate.estimated_days %}
+                    <br><span class="text-muted small">{{ rate.estimated_days }}</span>
+                    {% endif %}
+                    {% if fee_active and is_pickup %}
+                    <br><span class="badge bg-success-subtle text-success">No service fee</span>
+                    {% endif %}
+                  </div>
+                  <span class="fw-700 text-primary">
+                    {% if rate.price == 0 %}FREE{% else %}${{ "%.2f"|format(rate.price) }}{% endif %}
+                  </span>
+                </div>
+              </div>
+            </label>
+            {% endfor %}
+          </div>
+
+          {% if cash_option and not cash_option.blocked %}
+          <div class="alert alert-warning mt-3 mb-0" id="cashHoldNotice">
+            <div class="fw-700 mb-1"><i class="bi bi-clock me-2"></i>We'll hold your order for {{ cash_option.hold_hours }} hours</div>
+            <div class="small">Pick up and pay by <strong>{{ cash_option.deadline }}</strong>. After that, the items go back on the shelf.</div>
+            <div class="form-check mt-2">
+              <input class="form-check-input" type="checkbox" id="agreeDeadline">
+              <label class="form-check-label small" for="agreeDeadline">I understand I need to pick up by this time.</label>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+
+        <!-- Shipping Address -->
+        <div class="checkout-section mb-4 d-none" id="addressSection">
+          <h5 class="checkout-section-title"><i class="bi bi-geo-alt me-2"></i>Delivery Address</h5>
           <div class="row g-3">
             <div class="col-12">
               <label class="form-label">Street Address *</label>
@@ -87,39 +151,13 @@
           </div>
         </div>
 
-        <!-- Shipping Method -->
-        <div class="checkout-section mb-4">
-          <h5 class="checkout-section-title"><i class="bi bi-truck me-2"></i>Shipping Method</h5>
-          <div class="shipping-options" id="shippingOptions">
-            {% for rate in shipping_rates %}
-            <label class="shipping-option {% if loop.first %}selected{% endif %}">
-              <input type="radio" name="shipping_rate_id" value="{{ rate.id }}"
-                     {% if loop.first %}checked{% endif %}
-                     data-price="{{ rate.price }}" class="shipping-radio" />
-              <div class="shipping-option-content">
-                <div class="d-flex justify-content-between align-items-start">
-                  <div>
-                    <strong>{{ rate.name }}</strong>
-                    {% if rate.estimated_days %}
-                    <br><span class="text-muted small">{{ rate.estimated_days }}</span>
-                    {% endif %}
-                    {% if fee_active and 'pickup' in rate.name|lower %}
-                    <br><span class="badge bg-success-subtle text-success">No service fee</span>
-                    {% endif %}
-                  </div>
-                  <span class="fw-700 text-primary">
-                    {% if rate.price == 0 %}FREE{% else %}${{ "%.2f"|format(rate.price) }}{% endif %}
-                  </span>
-                </div>
-              </div>
-            </label>
-            {% endfor %}
-          </div>
-        </div>
-
         <!-- Payment -->
         <div class="checkout-section mb-4">
           <h5 class="checkout-section-title"><i class="bi bi-credit-card me-2"></i>Payment</h5>
+          <div id="cashPayNote" class="d-none d-flex align-items-center gap-3">
+            <i class="bi bi-cash-stack fs-3 text-primary"></i>
+            <span>No card needed. Pay cash at the counter when you pick up.</span>
+          </div>
           <div id="payment-element" class="stripe-element-container">
             <!-- Stripe mounts here -->
           </div>
@@ -127,7 +165,7 @@
         </div>
 
         <button type="submit" class="btn btn-primary btn-lg w-100" id="submitBtn">
-          <span id="submitText"><i class="bi bi-lock me-2"></i>Place Order</span>
+          <span id="submitText"><i class="bi bi-lock me-2"></i><span id="submitLabel">Place Order</span></span>
           <span id="submitSpinner" class="d-none">
             <span class="spinner-border spinner-border-sm me-2"></span>Processing…
           </span>
@@ -181,7 +219,7 @@
             </p>
             <hr />
             <div class="d-flex justify-content-between align-items-center">
-              <strong class="fs-5">Total</strong>
+              <strong class="fs-5" id="summaryTotalLabel">Total</strong>
               <strong class="fs-4 text-primary" id="summaryTotal">$—</strong>
             </div>
           </div>
@@ -229,33 +267,118 @@ async function initStripe(shippingRateId) {
   paymentElement.mount('#payment-element');
 }
 
+const CASH_TOTAL = {{ (cash_option.total if cash_option else 0)|float }};
+const PICKUP_TAX = {{ tax|float }};
+
+function selectedOption() {
+  return document.querySelector('.shipping-radio:checked');
+}
+
 function getSelectedShippingId() {
-  return parseInt(document.querySelector('.shipping-radio:checked')?.value || 0);
+  return parseInt(selectedOption()?.dataset.rate || 0);
+}
+
+function isCash() {
+  return selectedOption()?.dataset.cash === '1';
+}
+
+function isPickup() {
+  return selectedOption()?.dataset.pickup === '1';
+}
+
+// Show the right fields for the chosen option, and load Stripe only for card payments.
+function applyChoice() {
+  const cash = isCash();
+  document.getElementById('addressSection').classList.toggle('d-none', isPickup());
+  document.getElementById('cashHoldNotice')?.classList.toggle('d-none', !cash);
+  document.getElementById('cashPayNote').classList.toggle('d-none', !cash);
+  document.getElementById('payment-element').classList.toggle('d-none', cash);
+  document.getElementById('phoneRequired').classList.toggle('d-none', !cash);
+  document.getElementById('submitLabel').textContent = cash ? 'Reserve my order' : 'Place Order';
+  document.getElementById('summaryTotalLabel').textContent = cash ? 'Pay at pickup' : 'Total';
+  if (cash) {
+    document.getElementById('summaryShipping').textContent = 'FREE pickup';
+    document.getElementById('summaryTax').textContent = '$' + PICKUP_TAX.toFixed(2);
+    document.getElementById('summaryTotal').textContent = '$' + CASH_TOTAL.toFixed(2);
+    document.getElementById('summaryFeeRow').classList.add('d-none');
+    document.getElementById('summaryFeeNote').classList.add('d-none');
+  } else if (STRIPE_PUBLIC_KEY) {
+    initStripe(getSelectedShippingId());
+  }
+}
+
+function collectCustomer(formData) {
+  return {
+    shipping_rate_id: getSelectedShippingId(),
+    first_name: formData.get('first_name'),
+    last_name: formData.get('last_name'),
+    email: formData.get('email'),
+    phone: formData.get('phone'),
+    address_line1: formData.get('address_line1'),
+    address_line2: formData.get('address_line2'),
+    city: formData.get('city'),
+    state: formData.get('state'),
+    zip_code: formData.get('zip_code'),
+    country: 'US'
+  };
+}
+
+function resetButton() {
+  document.getElementById('submitBtn').disabled = false;
+  document.getElementById('submitText').classList.remove('d-none');
+  document.getElementById('submitSpinner').classList.add('d-none');
+}
+
+async function reserveCash(formData) {
+  if (!document.getElementById('agreeDeadline')?.checked) {
+    showError('Please tick the box to confirm you can pick up before the deadline.');
+    resetButton();
+    return;
+  }
+  const payload = collectCustomer(formData);
+  payload.agree_deadline = true;
+  const resp = await fetch('/checkout/reserve-cash', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': formData.get('csrf_token')},
+    body: JSON.stringify(payload)
+  });
+  const result = await resp.json();
+  if (result.success) {
+    window.location.href = result.redirect;
+  } else {
+    showError(result.error || 'Could not reserve your order. Please try again.');
+    resetButton();
+  }
 }
 
 // Init on load
 document.addEventListener('DOMContentLoaded', () => {
-  if (STRIPE_PUBLIC_KEY) initStripe(getSelectedShippingId());
+  applyChoice();
 
   document.querySelectorAll('.shipping-radio').forEach(radio => {
     radio.addEventListener('change', function() {
       document.querySelectorAll('.shipping-option').forEach(o => o.classList.remove('selected'));
       this.closest('.shipping-option').classList.add('selected');
-      if (STRIPE_PUBLIC_KEY) initStripe(getSelectedShippingId());
+      applyChoice();
     });
   });
 });
 
 document.getElementById('checkoutForm').addEventListener('submit', async function(e) {
   e.preventDefault();
-  if (!stripe || !elements) { showError('Payment not loaded. Please refresh.'); return; }
+  const formData = new FormData(this);
+  const missing = ['first_name', 'last_name', 'email'].concat(isCash() ? ['phone'] : [])
+    .concat(isPickup() ? [] : ['address_line1', 'city', 'zip_code'])
+    .filter(f => !(formData.get(f) || '').trim());
+  if (missing.length) { showError('Please fill in all the required (*) fields.'); return; }
+  if (!isCash() && (!stripe || !elements)) { showError('Payment not loaded. Please refresh.'); return; }
 
   const btn = document.getElementById('submitBtn');
   document.getElementById('submitText').classList.add('d-none');
   document.getElementById('submitSpinner').classList.remove('d-none');
   btn.disabled = true;
 
-  const formData = new FormData(this);
+  if (isCash()) { await reserveCash(formData); return; }
 
   let paymentIntent;
   try {
@@ -289,20 +412,8 @@ document.getElementById('checkoutForm').addEventListener('submit', async functio
   }
 
   // Save order
-  const payload = {
-    payment_intent_id: paymentIntent.id,
-    shipping_rate_id: getSelectedShippingId(),
-    first_name: formData.get('first_name'),
-    last_name: formData.get('last_name'),
-    email: formData.get('email'),
-    phone: formData.get('phone'),
-    address_line1: formData.get('address_line1'),
-    address_line2: formData.get('address_line2'),
-    city: formData.get('city'),
-    state: formData.get('state'),
-    zip_code: formData.get('zip_code'),
-    country: 'US'
-  };
+  const payload = collectCustomer(formData);
+  payload.payment_intent_id = paymentIntent.id;
 
   const resp = await fetch('/checkout/confirm', {
     method: 'POST',

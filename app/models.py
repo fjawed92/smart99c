@@ -219,7 +219,11 @@ def is_pickup_option(name):
 class Order(db.Model):
     __tablename__ = 'orders'
 
-    STATUS_CHOICES = ['pending', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded']
+    STATUS_CHOICES = ['pending', 'processing', 'ready', 'picked_up', 'shipped', 'delivered',
+                      'no_show', 'cancelled', 'refunded']
+    STATUS_LABELS = {'processing': 'New', 'ready': 'Ready for pickup', 'picked_up': 'Picked up',
+                     'no_show': 'No-show'}
+    OPEN_STATUSES = ('pending', 'processing', 'ready')
 
     id = db.Column(db.Integer, primary_key=True)
     order_number = db.Column(db.String(20), unique=True, nullable=False, index=True)
@@ -234,6 +238,11 @@ class Order(db.Model):
     stripe_livemode = db.Column(db.Boolean)
     shipping_method = db.Column(db.String(100))
     service_fee = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    payment_method = db.Column(db.String(20), nullable=False, default='card')  # card | cash
+    pickup_deadline = db.Column(db.DateTime)   # cash pickups only (UTC)
+    ready_at = db.Column(db.DateTime)
+    picked_up_at = db.Column(db.DateTime)
+    reminder_sent_at = db.Column(db.DateTime)
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -252,9 +261,42 @@ class Order(db.Model):
         return is_pickup_option(self.shipping_method)
 
     @property
+    def is_cash(self):
+        return self.payment_method == 'cash'
+
+    @property
+    def status_label(self):
+        return self.STATUS_LABELS.get(self.status, (self.status or '').replace('_', ' ').title())
+
+    @property
+    def is_open(self):
+        return self.status in self.OPEN_STATUSES
+
+    @property
+    def is_overdue(self):
+        return bool(self.is_cash and self.is_open and self.pickup_deadline
+                    and datetime.utcnow() > self.pickup_deadline)
+
+    @property
+    def time_left_label(self):
+        if not self.pickup_deadline:
+            return ''
+        secs = int((self.pickup_deadline - datetime.utcnow()).total_seconds())
+        days, rem = divmod(abs(secs), 86400)
+        hours, rem = divmod(rem, 3600)
+        mins = rem // 60
+        if days:
+            span = f'{days}d {hours}h'
+        elif hours:
+            span = f'{hours}h {mins}m' if hours < 3 else f'{hours}h'
+        else:
+            span = f'{mins}m'
+        return f'{span} left' if secs >= 0 else f'Overdue by {span}'
+
+    @property
     def fulfillment_label(self):
         if self.shipping_method:
-            return self.shipping_method
+            return self.shipping_method + (' · pay cash' if self.is_cash else '')
         # Orders placed before the option was saved: only the price is known.
         if self.shipping_cost and self.shipping_cost > 0:
             return 'Delivery (option not recorded)'

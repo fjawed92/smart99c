@@ -52,6 +52,27 @@ def create_app(config_name='default'):
     from app.services.visits import record_page_view
     app.after_request(record_page_view)
 
+    # Cash-pickup reminders and expired holds: checked at most every 5 minutes
+    # while the site is in use (there's no separate background worker).
+    from app.services.pickup import process_holds, format_local
+    app.jinja_env.filters['local_time'] = format_local
+    last_hold_check = {'at': None}
+
+    @app.before_request
+    def check_pickup_holds():
+        from flask import request as req
+        if app.config.get('TESTING') or req.path.startswith('/static'):
+            return
+        now = datetime.utcnow()
+        if last_hold_check['at'] and (now - last_hold_check['at']).total_seconds() < 300:
+            return
+        last_hold_check['at'] = now
+        try:
+            process_holds(now)
+        except Exception:
+            db.session.rollback()
+            app.logger.exception('Pickup hold check failed')
+
     # Custom error handlers
     from flask import render_template
 

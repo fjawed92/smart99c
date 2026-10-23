@@ -11,7 +11,8 @@ from wtforms import (StringField, TextAreaField, DecimalField, IntegerField,
                      BooleanField, SelectField, FileField, PasswordField, validators)
 from app.extensions import db
 from app.models import (Product, ProductImage, ProductVariant, Category, Order,
-                        OrderItem, User, ShippingRate, SiteSettings, PaymentLink)
+                        OrderItem, User, ShippingRate, SiteSettings, PaymentLink,
+                        ShippingAddress)
 from app.helpers import (generate_slug, get_site_setting, set_site_setting,
                          encrypt_secret)
 
@@ -703,36 +704,100 @@ def edit_category(cat_id):
 
 # ─── Orders ──────────────────────────────────────────────────────────────────
 
+ORDER_TABS = [
+    ('pickup', 'Waiting for pickup'),
+    ('late', 'Past deadline'),
+    ('delivery', 'Delivery'),
+    ('done', 'Completed'),
+    ('noshow', 'No-shows'),
+    ('all', 'All orders'),
+]
+
+
+def _tab_filter(query, tab, now):
+    is_pickup = Order.shipping_method.ilike('%pickup%')
+    overdue = db.and_(Order.payment_method == 'cash', Order.pickup_deadline.isnot(None),
+                      Order.pickup_deadline < now)
+    open_ = Order.status.in_(Order.OPEN_STATUSES)
+    if tab == 'pickup':
+        return query.filter(is_pickup, open_, db.not_(overdue))
+    if tab == 'late':
+        return query.filter(open_, overdue)
+    if tab == 'delivery':
+        return query.filter(db.or_(Order.shipping_method.is_(None), db.not_(is_pickup)),
+                            Order.status.in_(('pending', 'processing', 'shipped')))
+    if tab == 'done':
+        return query.filter(Order.status.in_(('picked_up', 'delivered')))
+    if tab == 'noshow':
+        return query.filter(Order.status == 'no_show')
+    return query
+
+
 @admin_bp.route('/orders')
 @admin_required
 def orders():
+    from app.models import ShippingAddress
+    from app.services.pickup import process_holds, to_local, to_utc
+    try:
+        process_holds()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Pickup hold check failed')
+
     page = request.args.get('page', 1, type=int)
+    tab = request.args.get('tab', 'pickup')
+    if tab not in dict(ORDER_TABS):
+        tab = 'pickup'
     status = request.args.get('status', '')
-    search = request.args.get('q', '')
+    search = request.args.get('q', '').strip()
     date_from = request.args.get('date_from', '')
     date_to = request.args.get('date_to', '')
+    now = datetime.utcnow()
 
     query = Order.query
-    if status:
-        query = query.filter_by(status=status)
     if search:
-        query = query.join(ShippingAddress, isouter=True).filter(
-            db.or_(
-                Order.order_number.ilike(f'%{search}%'),
-                ShippingAddress.email.ilike(f'%{search}%'),
-                ShippingAddress.last_name.ilike(f'%{search}%'),
-            )
-        )
+        digits = ''.join(c for c in search if c.isdigit())
+        conds = [Order.order_number.ilike(f'%{search}%'),
+                 ShippingAddress.email.ilike(f'%{search}%'),
+                 ShippingAddress.first_name.ilike(f'%{search}%'),
+                 ShippingAddress.last_name.ilike(f'%{search}%')]
+        if len(digits) >= 4:
+            conds.append(ShippingAddress.phone.ilike(f'%{digits[-4:]}%'))
+        query = query.join(ShippingAddress, isouter=True).filter(db.or_(*conds))
+        tab = 'all' if 'tab' not in request.args else tab
     if date_from:
         query = query.filter(Order.created_at >= date_from)
     if date_to:
         query = query.filter(Order.created_at <= date_to + ' 23:59:59')
+    if status and tab == 'all':
+        query = query.filter_by(status=status)
 
-    from app.models import ShippingAddress
-    pagination = query.order_by(Order.created_at.desc()).paginate(page=page, per_page=25)
+    tab_counts = {key: _tab_filter(Order.query, key, now).count() for key, _ in ORDER_TABS}
+    pagination = _tab_filter(query, tab, now).order_by(Order.created_at.desc())\
+        .paginate(page=page, per_page=25)
+
+    # Summary boxes
+    open_cash = Order.query.filter(Order.payment_method == 'cash',
+                                   Order.status.in_(Order.OPEN_STATUSES)).all()
+    today_start = to_utc(to_local(now).replace(hour=0, minute=0, second=0, microsecond=0))
+    paid_today = Order.query.filter(Order.payment_method == 'card',
+                                    Order.created_at >= today_start,
+                                    Order.status.notin_(('pending', 'cancelled', 'refunded'))).all()
+    summary = {
+        'cash_due': sum((o.total for o in open_cash), 0),
+        'cash_count': len(open_cash),
+        'to_pack': Order.query.filter(Order.status == 'processing').count(),
+        'late': tab_counts['late'],
+        'paid_today': sum((o.total for o in paid_today), 0),
+        'paid_today_count': len(paid_today),
+    }
     return render_template('admin/orders.html',
                            pagination=pagination,
                            orders=pagination.items,
+                           tabs=ORDER_TABS,
+                           tab=tab,
+                           tab_counts=tab_counts,
+                           summary=summary,
                            status=status,
                            search=search)
 
@@ -749,9 +814,25 @@ def order_detail(order_id):
     if order.stripe_payment_intent_id:
         stripe_url = ('https://dashboard.stripe.com/' + ('' if livemode else 'test/')
                       + 'payments/' + order.stripe_payment_intent_id)
+    from app.services.pickup import no_show_count, to_local
+    addr = order.shipping_address
+    past_orders = 0
+    if addr and addr.email:
+        past_orders = Order.query.join(ShippingAddress)\
+            .filter(db.func.lower(ShippingAddress.email) == addr.email.lower(),
+                    Order.id != order.id).count()
+    hold_pct = 0
+    if order.is_cash and order.pickup_deadline and order.created_at:
+        span = (order.pickup_deadline - order.created_at).total_seconds() or 1
+        left = (order.pickup_deadline - datetime.utcnow()).total_seconds()
+        hold_pct = max(0, min(100, round(100 * left / span)))
     return render_template('admin/order_detail.html', order=order,
                            status_choices=Order.STATUS_CHOICES,
-                           stripe_livemode=livemode, stripe_url=stripe_url)
+                           stripe_livemode=livemode, stripe_url=stripe_url,
+                           past_orders=past_orders,
+                           no_shows=no_show_count(addr.email, addr.phone) if addr else 0,
+                           hold_pct=hold_pct,
+                           today=to_local(datetime.utcnow()).date().isoformat())
 
 
 @admin_bp.route('/orders/<int:order_id>/status', methods=['POST'])
@@ -763,18 +844,82 @@ def update_order_status(order_id):
         flash('Invalid status.', 'error')
         return redirect(url_for('admin.order_detail', order_id=order_id))
 
-    if new_status == 'cancelled' and order.status not in ['cancelled', 'refunded']:
-        for item in order.items:
-            if item.product and item.product.track_inventory:
-                if item.variant is not None:
-                    item.variant.stock_quantity += item.quantity
-                else:
-                    item.product.stock_quantity += item.quantity
+    if new_status in ('cancelled', 'no_show') and order.status not in ('cancelled', 'refunded', 'no_show'):
+        from app.services.pickup import restock
+        restock(order)
 
     order.status = new_status
     db.session.commit()
     flash(f'Order {order.order_number} status updated to {new_status}.', 'success')
     return redirect(url_for('admin.order_detail', order_id=order_id))
+
+
+@admin_bp.route('/orders/<int:order_id>/pickup', methods=['POST'])
+@admin_required
+def order_pickup_action(order_id):
+    """One-tap actions from the orders list and order page."""
+    from app.services.pickup import restock, email_customer, to_utc, STORE_TZ
+    order = Order.query.get_or_404(order_id)
+    action = request.form.get('action', '')
+    back = request.form.get('next') or url_for('admin.order_detail', order_id=order.id)
+    if not back.startswith('/'):
+        back = url_for('admin.order_detail', order_id=order.id)
+    now = datetime.utcnow()
+    closed = ('picked_up', 'delivered', 'no_show', 'cancelled', 'refunded')
+    msg = None
+
+    if action == 'note':
+        order.notes = (request.form.get('notes') or '').strip()
+        msg = 'Note saved.'
+    elif action in ('ready', 'picked_up', 'delivered', 'no_show', 'cancel',
+                    'extend_12', 'extend_24', 'extend_date') and order.status in closed:
+        flash(f'Order {order.order_number} is already {order.status_label.lower()}.', 'warning')
+        return redirect(back)
+    elif action == 'ready':
+        order.status = 'ready'
+        order.ready_at = now
+        db.session.commit()
+        sent = email_customer(order, 'ready')
+        flash(f'{order.order_number} marked ready.'
+              + (' Customer emailed.' if sent else ' (Email not sent — check Admin → Email.)'),
+              'success')
+        return redirect(back)
+    elif action == 'picked_up':
+        order.status = 'picked_up'
+        order.picked_up_at = now
+        msg = f'{order.order_number} picked up' + (' and paid in cash.' if order.is_cash else '.')
+    elif action == 'delivered':
+        order.status = 'delivered'
+        msg = f'{order.order_number} marked delivered.'
+    elif action in ('no_show', 'cancel'):
+        restock(order)
+        order.status = 'no_show' if action == 'no_show' else 'cancelled'
+        msg = (f'{order.order_number} marked as no-show. Items are back in stock.'
+               if action == 'no_show' else f'{order.order_number} cancelled. Items are back in stock.')
+    elif action in ('extend_12', 'extend_24', 'extend_date'):
+        base = max(order.pickup_deadline or now, now)
+        if action == 'extend_date':
+            try:
+                picked = datetime.strptime(request.form.get('date', ''), '%Y-%m-%d')
+            except ValueError:
+                flash('Please pick a date.', 'error')
+                return redirect(back)
+            from app.store import STORE
+            hours = STORE['open_hours'].get(picked.weekday()) or (9, 21)
+            new_deadline = to_utc(picked.replace(hour=hours[1], tzinfo=STORE_TZ))
+        else:
+            new_deadline = base + timedelta(hours=12 if action == 'extend_12' else 24)
+        order.pickup_deadline = new_deadline
+        order.reminder_sent_at = None
+        msg = f'Hold for {order.order_number} extended.'
+    else:
+        flash('Unknown action.', 'error')
+        return redirect(back)
+
+    db.session.commit()
+    if msg:
+        flash(msg, 'success')
+    return redirect(back)
 
 
 # ─── Users ───────────────────────────────────────────────────────────────────
@@ -995,6 +1140,13 @@ def settings():
             'service_fee_active',
             'service_fee_percent',
             'service_fee_fixed',
+            'cash_pickup_active',
+            'cash_hold_hours',
+            'cash_max_order',
+            'cash_reminder_hours',
+            'cash_noshow_limit',
+            'cash_hold_closing_active',
+            'cash_expire_action',
             'facebook_url',
             'instagram_url',
             'tiktok_url',

@@ -430,13 +430,17 @@ a.tile:hover { transform: translate(-2px, -2px); box-shadow: var(--pop-lg); colo
 .order-number-badge strong { color: var(--ink); }
 
 /* order status pills */
-.status-pending, .status-processing, .status-shipped, .status-delivered, .status-cancelled, .status-refunded { border: 2px solid var(--ink); color: var(--ink) !important; }
+.status-pending, .status-processing, .status-shipped, .status-delivered, .status-cancelled, .status-refunded,
+.status-ready, .status-picked_up, .status-no_show { border: 2px solid var(--ink); color: var(--ink) !important; }
 .status-pending    { background: var(--y-soft); }
 .status-processing { background: var(--n-soft); }
 .status-shipped    { background: #DCEBFF; }
 .status-delivered  { background: var(--ok-soft); }
 .status-cancelled  { background: var(--r-soft); }
 .status-refunded   { background: #EDEDF2; }
+.status-ready      { background: #DCEBFF; }
+.status-picked_up  { background: var(--ok-soft); }
+.status-no_show    { background: var(--r-soft); }
 
 /* ── Auth / account ────────────────────────────────────────── */
 .auth-page { min-height: calc(100vh - 220px); display: flex; align-items: center; padding: 3rem 0; background: var(--paper); }

@@ -2,71 +2,131 @@
 {% block title %}Order {{ order.order_number }}{% endblock %}
 {% block page_title %}Order {{ order.order_number }}{% endblock %}
 
+{% macro action_form(action, label, classes, confirm_text=None) %}
+<form method="POST" action="{{ url_for('admin.order_pickup_action', order_id=order.id) }}"
+      {% if confirm_text %}onsubmit="return confirm('{{ confirm_text }}')"{% endif %}>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+  <button name="action" value="{{ action }}" class="{{ classes }}">{{ label|safe }}</button>
+</form>
+{% endmacro %}
+
 {% block content %}
-<div class="d-flex align-items-center mb-4 gap-3">
-  <a href="{{ url_for('admin.orders') }}" class="btn btn-sm btn-outline-secondary">
-    <i class="bi bi-arrow-left"></i>
+{% set addr = order.shipping_address %}
+<div class="d-flex flex-wrap align-items-center mb-4 gap-3">
+  <a href="{{ url_for('admin.orders') }}" class="btn btn-sm btn-outline-secondary" aria-label="Back to orders">
+    <i class="bi bi-arrow-left"></i> Orders
   </a>
-  <span class="badge status-{{ order.status }} fs-6">{{ order.status|title }}</span>
-  <span class="text-muted small">Placed {{ order.created_at.strftime('%B %d, %Y at %I:%M %p') }}</span>
+  <span class="badge status-{{ order.status }} fs-6">{{ order.status_label }}</span>
+  <span class="text-muted small">Placed {{ order.created_at|local_time('%a, %b %-d at %-I:%M %p') }}</span>
 </div>
 
+<!-- What kind of order -->
+{% if order.is_cash %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 p-4 mb-4 rounded-4 text-white" style="background:#1B4F80">
+  <div class="d-flex align-items-center gap-3">
+    <i class="bi bi-shop fs-1"></i>
+    <div>
+      <div class="fw-800 fs-4">STORE PICKUP · PAY CASH</div>
+      <div class="opacity-75">Nothing has been charged. Collect cash at the counter.</div>
+    </div>
+  </div>
+  <div class="text-end">
+    <div class="small fw-700 opacity-75">{% if order.status == 'picked_up' %}Collected{% else %}Collect{% endif %}</div>
+    <div class="fw-800 fs-2">${{ "%.2f"|format(order.total) }}</div>
+  </div>
+</div>
+{% else %}
 <div class="alert {% if order.is_pickup %}alert-success{% elif order.is_pickup is none %}alert-warning{% else %}alert-primary{% endif %} d-flex align-items-center gap-3 mb-4">
   <i class="bi {% if order.is_pickup %}bi-shop{% else %}bi-truck{% endif %} fs-3"></i>
   <div>
     <div class="fw-700 fs-5">
-      {% if order.is_pickup %}STORE PICKUP{% elif order.is_pickup is none %}PICKUP OR DELIVERY?{% else %}DELIVERY{% endif %}
+      {% if order.is_pickup %}STORE PICKUP · PAID ONLINE{% elif order.is_pickup is none %}PICKUP OR DELIVERY?{% else %}DELIVERY{% endif %}
     </div>
     <div class="small">{{ order.fulfillment_label }}{% if order.is_pickup is none %} — call or email the customer to confirm.{% endif %}</div>
   </div>
 </div>
+{% endif %}
 
 <div class="row g-4">
   <div class="col-lg-8">
 
-    <!-- Items -->
-    <div class="card border-0 shadow-sm mb-4">
-      <div class="card-header bg-white border-0 pt-3">
-        <h6 class="fw-700 mb-0">Items ({{ order.items|length }})</h6>
-      </div>
+    {% if order.is_cash and order.pickup_deadline and order.is_open %}
+    <!-- Hold countdown -->
+    <div class="card border-0 shadow-sm mb-4 {% if order.is_overdue %}bg-danger-subtle{% else %}bg-warning-subtle{% endif %}">
       <div class="card-body">
-        {% for item in order.items %}
-        <div class="d-flex align-items-center gap-3 py-2 {% if not loop.last %}border-bottom{% endif %}">
-          {% if item.product and item.product.primary_image_url %}
-          <img src="{{ item.product.primary_image_url }}" alt="{{ item.product_name }}" class="cart-item-thumb" />
-          {% endif %}
-          <div class="flex-grow-1">
-            <div class="fw-600">{{ item.product_name }}</div>
-            <small class="text-muted">SKU: {{ item.product_sku or '—' }}</small>
+        <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-2">
+          <div>
+            <div class="small fw-800 text-uppercase">Hold until</div>
+            <div class="fs-4 fw-800">{{ order.pickup_deadline|local_time }}</div>
           </div>
-          <div class="text-muted small">×{{ item.quantity }}</div>
-          <div class="text-muted small">${{ "%.2f"|format(item.unit_price) }}</div>
-          <div class="fw-600">${{ "%.2f"|format(item.total_price) }}</div>
+          <div class="fs-5 fw-800 {% if order.is_overdue %}text-danger-emphasis{% endif %}">{{ order.time_left_label }}</div>
         </div>
-        {% endfor %}
-      </div>
-    </div>
-
-    <!-- Shipping Address -->
-    {% if order.shipping_address %}
-    <div class="card border-0 shadow-sm mb-4">
-      <div class="card-header bg-white border-0 pt-3">
-        <h6 class="fw-700 mb-0">{% if order.is_pickup %}Customer{% else %}Delivery Address{% endif %}</h6>
-      </div>
-      <div class="card-body">
-        <p class="mb-1 fw-600">{{ order.shipping_address.full_name }}</p>
-        <p class="mb-1 text-muted">{{ order.shipping_address.address_line1 }}</p>
-        {% if order.shipping_address.address_line2 %}<p class="mb-1 text-muted">{{ order.shipping_address.address_line2 }}</p>{% endif %}
-        <p class="mb-1 text-muted">{{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.zip_code }}</p>
-        <p class="mb-1 text-muted"><i class="bi bi-envelope me-2"></i>{{ order.shipping_address.email }}</p>
-        {% if order.shipping_address.phone %}
-        <p class="mb-0 text-muted"><i class="bi bi-telephone me-2"></i>{{ order.shipping_address.phone }}</p>
-        {% endif %}
+        <div class="progress mb-2" role="progressbar" aria-label="Time left on hold" aria-valuenow="{{ hold_pct }}" aria-valuemin="0" aria-valuemax="100" style="height:10px">
+          <div class="progress-bar {% if order.is_overdue %}bg-danger{% else %}bg-warning{% endif %}" style="width: {{ hold_pct }}%"></div>
+        </div>
+        <div class="small">
+          {% if order.is_overdue %}Past the deadline. Mark it as a no-show to put the items back, or give more time.
+          {% elif order.reminder_sent_at %}Reminder email sent {{ order.reminder_sent_at|local_time('%a %-I:%M %p') }}.
+          {% else %}A reminder email goes out before the deadline.{% endif %}
+        </div>
       </div>
     </div>
     {% endif %}
 
+    <!-- Items -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-0 pt-3">
+        <h6 class="fw-700 mb-0">{% if order.is_open %}Items to pack{% else %}Items{% endif %} ({{ order.items|length }})</h6>
+      </div>
+      <div class="card-body">
+        {% for item in order.items %}
+        <label class="d-flex align-items-center gap-3 py-2 {% if not loop.last %}border-bottom{% endif %}">
+          {% if order.is_open %}<input type="checkbox" class="form-check-input m-0" style="width:20px;height:20px" aria-label="Packed {{ item.display_name }}">{% endif %}
+          {% if item.product and item.product.primary_image_url %}
+          <img src="{{ item.product.primary_image_url }}" alt="" class="cart-item-thumb" />
+          {% endif %}
+          <span class="flex-grow-1">
+            <span class="fw-600 d-block">{{ item.display_name }}</span>
+            <small class="text-muted">SKU: {{ item.product_sku or '—' }}</small>
+          </span>
+          <span class="text-muted small">×{{ item.quantity }}</span>
+          <span class="text-muted small">${{ "%.2f"|format(item.unit_price) }}</span>
+          <span class="fw-600">${{ "%.2f"|format(item.total_price) }}</span>
+        </label>
+        {% endfor %}
+        <hr />
+        <div class="d-flex justify-content-between mb-1"><span>Subtotal</span><span>${{ "%.2f"|format(order.subtotal) }}</span></div>
+        <div class="d-flex justify-content-between mb-1"><span>Tax</span><span>${{ "%.2f"|format(order.tax) }}</span></div>
+        <div class="d-flex justify-content-between mb-1"><span>{% if order.is_pickup %}Pickup{% else %}Delivery{% endif %}</span><span>{% if order.shipping_cost == 0 %}FREE{% else %}${{ "%.2f"|format(order.shipping_cost) }}{% endif %}</span></div>
+        {% if order.service_fee and order.service_fee > 0 %}
+        <div class="d-flex justify-content-between mb-1"><span>Online service fee</span><span>${{ "%.2f"|format(order.service_fee) }}</span></div>
+        {% endif %}
+        <div class="d-flex justify-content-between fs-5 mt-2"><strong>{% if order.is_cash %}Cash due{% else %}Total paid{% endif %}</strong><strong class="text-primary">${{ "%.2f"|format(order.total) }}</strong></div>
+      </div>
+    </div>
+
+    <!-- History & note -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-0 pt-3"><h6 class="fw-700 mb-0">History</h6></div>
+      <div class="card-body">
+        <ul class="list-unstyled small mb-3">
+          <li class="d-flex justify-content-between py-1"><span><i class="bi bi-circle-fill text-primary me-2" style="font-size:8px"></i>{% if order.is_cash %}Reserved online (cash at pickup){% else %}Ordered and paid online{% endif %}</span><span class="text-muted">{{ order.created_at|local_time('%a %-I:%M %p') }}</span></li>
+          {% if order.ready_at %}<li class="d-flex justify-content-between py-1"><span><i class="bi bi-circle-fill text-primary me-2" style="font-size:8px"></i>Marked ready · customer emailed</span><span class="text-muted">{{ order.ready_at|local_time('%a %-I:%M %p') }}</span></li>{% endif %}
+          {% if order.reminder_sent_at %}<li class="d-flex justify-content-between py-1"><span><i class="bi bi-circle-fill text-primary me-2" style="font-size:8px"></i>Reminder email</span><span class="text-muted">{{ order.reminder_sent_at|local_time('%a %-I:%M %p') }}</span></li>{% endif %}
+          {% if order.picked_up_at %}<li class="d-flex justify-content-between py-1"><span><i class="bi bi-circle-fill text-success me-2" style="font-size:8px"></i>Picked up{% if order.is_cash %} · cash paid{% endif %}</span><span class="text-muted">{{ order.picked_up_at|local_time('%a %-I:%M %p') }}</span></li>{% endif %}
+          {% if order.status in ('no_show', 'cancelled') %}<li class="py-1"><i class="bi bi-circle-fill text-danger me-2" style="font-size:8px"></i>{{ order.status_label }} · items put back in stock</li>{% endif %}
+        </ul>
+        <form method="POST" action="{{ url_for('admin.order_pickup_action', order_id=order.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <label for="orderNotes" class="form-label small fw-700">Private note</label>
+          <textarea id="orderNotes" name="notes" rows="2" class="form-control mb-2" placeholder="e.g. Customer called, coming Sunday morning">{{ order.notes or '' }}</textarea>
+          <button name="action" value="note" class="btn btn-sm btn-outline-secondary">Save note</button>
+        </form>
+      </div>
+    </div>
+
     <!-- Payment Info -->
+    {% if not order.is_cash %}
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white border-0 pt-3">
         <h6 class="fw-700 mb-0">Payment</h6>
@@ -91,42 +151,80 @@
         {% endif %}
       </div>
     </div>
+    {% endif %}
   </div>
 
   <!-- Sidebar -->
   <div class="col-lg-4">
-    <!-- Update Status -->
+    {% if order.is_open %}
     <div class="card border-0 shadow-sm mb-4">
-      <div class="card-header bg-white border-0 pt-3">
-        <h6 class="fw-700 mb-0">Update Status</h6>
+      <div class="card-header bg-white border-0 pt-3"><h6 class="fw-700 mb-0">What happened?</h6></div>
+      <div class="card-body d-grid gap-2">
+        {% if order.is_pickup %}
+          {% if order.status == 'processing' %}
+          {{ action_form('ready', '<i class="bi bi-bag-check me-2"></i>Packed · tell customer it\'s ready', 'btn btn-outline-primary btn-lg w-100 fw-700') }}
+          {% endif %}
+          {{ action_form('picked_up', '<i class="bi bi-check-lg me-2"></i>Picked up' ~ (' · cash paid' if order.is_cash else ''), 'btn btn-success btn-lg w-100 fw-800') }}
+          {% if order.is_cash %}
+          <div class="mt-2">
+            <div class="small fw-700 mb-1">Give more time</div>
+            <div class="d-grid gap-2" style="grid-template-columns: repeat(2, minmax(0, 1fr))">
+              {{ action_form('extend_12', '+12 hrs', 'btn btn-outline-secondary w-100 fw-700') }}
+              {{ action_form('extend_24', '+1 day', 'btn btn-outline-secondary w-100 fw-700') }}
+            </div>
+            <form method="POST" action="{{ url_for('admin.order_pickup_action', order_id=order.id) }}" class="d-flex gap-2 mt-2">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+              <input type="date" name="date" min="{{ today }}" class="form-control" aria-label="Hold until date" required>
+              <button name="action" value="extend_date" class="btn btn-outline-secondary fw-700 text-nowrap">Hold until</button>
+            </form>
+          </div>
+          {{ action_form('no_show', 'No-show · put items back on shelf', 'btn btn-outline-danger btn-lg w-100 fw-800 mt-2', 'Mark as no-show and put the items back in stock?') }}
+          {% endif %}
+        {% elif order.status != 'pending' %}
+          {{ action_form('delivered', '<i class="bi bi-truck me-2"></i>Delivered', 'btn btn-success btn-lg w-100 fw-800') }}
+        {% endif %}
+        {{ action_form('cancel', 'Cancel order (customer asked)', 'btn btn-link text-muted w-100', 'Cancel this order and put the items back in stock?' + ('' if order.is_cash else ' Refund the card in Stripe separately.')) }}
       </div>
+    </div>
+    {% endif %}
+
+    <!-- Customer -->
+    {% if addr %}
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-0 pt-3"><h6 class="fw-700 mb-0">Customer</h6></div>
+      <div class="card-body">
+        <p class="mb-1 fw-700">{{ addr.full_name }}</p>
+        {% if addr.phone %}<p class="mb-1 text-muted small">{{ addr.phone }}</p>{% endif %}
+        <p class="mb-2 text-muted small">{{ addr.email }}</p>
+        {% if not order.is_pickup and addr.address_line1 %}
+        <p class="mb-2 small">{{ addr.full_address }}</p>
+        {% endif %}
+        <div class="d-grid gap-2 mb-3" style="grid-template-columns: repeat(3, minmax(0, 1fr))">
+          {% if addr.phone %}
+          <a href="tel:{{ addr.phone }}" class="btn btn-sm btn-outline-primary fw-700">Call</a>
+          <a href="sms:{{ addr.phone }}" class="btn btn-sm btn-outline-primary fw-700">Text</a>
+          {% endif %}
+          <a href="mailto:{{ addr.email }}" class="btn btn-sm btn-outline-primary fw-700">Email</a>
+        </div>
+        <span class="badge rounded-pill text-bg-light">{{ past_orders }} past order{{ 's' if past_orders != 1 }}</span>
+        <span class="badge rounded-pill {% if no_shows %}text-bg-danger{% else %}text-bg-success{% endif %}">{{ no_shows }} no-show{{ 's' if no_shows != 1 }}</span>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Advanced status -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 pt-3"><h6 class="fw-700 mb-0">Change status manually</h6></div>
       <div class="card-body">
         <form method="POST" action="{{ url_for('admin.update_order_status', order_id=order.id) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-          <select name="status" class="form-select mb-3">
+          <select name="status" class="form-select mb-3" aria-label="Status">
             {% for s in status_choices %}
-            <option value="{{ s }}" {% if s == order.status %}selected{% endif %}>{{ s|title }}</option>
+            <option value="{{ s }}" {% if s == order.status %}selected{% endif %}>{{ order.STATUS_LABELS.get(s, s.replace('_', ' ')|title) }}</option>
             {% endfor %}
           </select>
-          <button type="submit" class="btn btn-primary w-100">Update Status</button>
+          <button type="submit" class="btn btn-outline-primary w-100">Update Status</button>
         </form>
-      </div>
-    </div>
-
-    <!-- Order Summary -->
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white border-0 pt-3">
-        <h6 class="fw-700 mb-0">Order Total</h6>
-      </div>
-      <div class="card-body">
-        <div class="d-flex justify-content-between mb-2"><span>Subtotal</span><span>${{ "%.2f"|format(order.subtotal) }}</span></div>
-        <div class="d-flex justify-content-between mb-2"><span>Shipping</span><span>{% if order.shipping_cost == 0 %}FREE{% else %}${{ "%.2f"|format(order.shipping_cost) }}{% endif %}</span></div>
-        <div class="d-flex justify-content-between mb-2"><span>Tax</span><span>${{ "%.2f"|format(order.tax) }}</span></div>
-        {% if order.service_fee and order.service_fee > 0 %}
-        <div class="d-flex justify-content-between mb-2"><span>Online service fee</span><span>${{ "%.2f"|format(order.service_fee) }}</span></div>
-        {% endif %}
-        <hr />
-        <div class="d-flex justify-content-between"><strong>Total</strong><strong class="text-primary">${{ "%.2f"|format(order.total) }}</strong></div>
       </div>
     </div>
   </div>

@@ -83,6 +83,69 @@
         </div>
       </div>
 
+      <div class="card border-0 shadow-sm mb-4" id="cash-pickup">
+        <div class="card-header bg-white border-0 pt-3">
+          <h6 class="fw-700 mb-0">Pay Cash at Pickup</h6>
+        </div>
+        <div class="card-body">
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="cash_pickup_active" name="cash_pickup_active" {% if settings.get('cash_pickup_active', '1') == '1' %}checked{% endif %}>
+            <label class="form-check-label fw-700" for="cash_pickup_active">Let customers pay cash when they pick up</label>
+            <div class="small text-muted">Shows a "Pick up · Pay cash in store" option at checkout.</div>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label" for="cash_hold_hours">Hold orders for</label>
+              <div class="input-group">
+                <input type="number" id="cash_hold_hours" name="cash_hold_hours" class="form-control" value="{{ settings.get('cash_hold_hours', '36') }}" min="1" max="336" step="1" />
+                <span class="input-group-text">hours</span>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="cash_max_order">Largest cash order allowed</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" id="cash_max_order" name="cash_max_order" class="form-control" value="{{ settings.get('cash_max_order', '75') }}" min="0" step="0.01" />
+              </div>
+              <small class="text-muted">Bigger orders must pay online. 0 = no limit.</small>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="cash_reminder_hours">Email a reminder</label>
+              <div class="input-group">
+                <input type="number" id="cash_reminder_hours" name="cash_reminder_hours" class="form-control" value="{{ settings.get('cash_reminder_hours', '6') }}" min="0" step="1" />
+                <span class="input-group-text">hrs before</span>
+              </div>
+              <small class="text-muted">0 = no reminder. Needs Admin → Email set up.</small>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="cash_noshow_limit">Turn off cash option after</label>
+              <div class="input-group">
+                <input type="number" id="cash_noshow_limit" name="cash_noshow_limit" class="form-control" value="{{ settings.get('cash_noshow_limit', '2') }}" min="0" step="1" />
+                <span class="input-group-text">no-shows</span>
+              </div>
+              <small class="text-muted">Repeat no-shows must pay online. 0 = never.</small>
+            </div>
+          </div>
+          <div class="form-check form-switch mt-3">
+            <input class="form-check-input" type="checkbox" id="cash_hold_closing_active" name="cash_hold_closing_active" {% if settings.get('cash_hold_closing_active', '1') == '1' %}checked{% endif %}>
+            <label class="form-check-label fw-700" for="cash_hold_closing_active">Never end a hold while the store is closed</label>
+            <div class="small text-muted">If the deadline lands overnight, it moves to closing time on the next open day.</div>
+          </div>
+          <fieldset class="mt-3">
+            <legend class="fs-6 fw-700">When the deadline passes</legend>
+            {% set expire = settings.get('cash_expire_action', 'ask') %}
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="cash_expire_action" id="expire_ask" value="ask" {% if expire != 'auto' %}checked{% endif %}>
+              <label class="form-check-label" for="expire_ask">Move it to "Past deadline" and let me decide</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="cash_expire_action" id="expire_auto" value="auto" {% if expire == 'auto' %}checked{% endif %}>
+              <label class="form-check-label" for="expire_auto">Cancel it automatically, put stock back and email the customer</label>
+            </div>
+          </fieldset>
+        </div>
+      </div>
+
       <div class="card border-0 shadow-sm mb-4">
         <div class="card-header bg-white border-0 pt-3">
           <h6 class="fw-700 mb-0">Store Hours</h6>
