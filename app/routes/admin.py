@@ -265,14 +265,14 @@ def orders_export():
     ws.title = 'Orders'
 
     header = ['Order #', 'Date', 'Status', 'Customer', 'Email', 'Phone',
-              'Items', 'Subtotal', 'Tax', 'Shipping', 'Total', 'Payment Intent']
+              'Items', 'Pickup / Delivery', 'Subtotal', 'Tax', 'Shipping', 'Total', 'Payment Intent']
     for i, h in enumerate(header, start=1):
         c = ws.cell(row=1, column=i, value=h)
         c.font = Font(bold=True, color='FFFFFF')
         c.fill = PatternFill('solid', fgColor='E8334A')
         c.alignment = Alignment(horizontal='left', vertical='center')
 
-    widths = [14, 18, 12, 24, 28, 16, 50, 10, 10, 11, 10, 32]
+    widths = [14, 18, 12, 24, 28, 16, 50, 30, 10, 10, 11, 10, 32]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
 
@@ -290,6 +290,7 @@ def orders_export():
             addr.email if addr else (o.user.email if o.user else ''),
             addr.phone if addr else '',
             items_str,
+            o.fulfillment_label,
             float(o.subtotal or 0),
             float(o.tax or 0),
             float(o.shipping_cost or 0),
@@ -739,8 +740,17 @@ def orders():
 @admin_required
 def order_detail(order_id):
     order = Order.query.get_or_404(order_id)
+    livemode = order.stripe_livemode
+    if livemode is None:
+        # Older orders didn't save this; go by the key the site is using now.
+        livemode = not (current_app.config.get('STRIPE_SECRET_KEY') or '').startswith('sk_test')
+    stripe_url = None
+    if order.stripe_payment_intent_id:
+        stripe_url = ('https://dashboard.stripe.com/' + ('' if livemode else 'test/')
+                      + 'payments/' + order.stripe_payment_intent_id)
     return render_template('admin/order_detail.html', order=order,
-                           status_choices=Order.STATUS_CHOICES)
+                           status_choices=Order.STATUS_CHOICES,
+                           stripe_livemode=livemode, stripe_url=stripe_url)
 
 
 @admin_bp.route('/orders/<int:order_id>/status', methods=['POST'])

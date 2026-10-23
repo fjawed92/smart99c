@@ -73,6 +73,7 @@ def create_payment_intent():
     tax = subtotal * tax_rate
 
     shipping_cost = Decimal('0')
+    rate = None
     if shipping_rate_id:
         rate = ShippingRate.query.get(int(shipping_rate_id))
         if rate:
@@ -90,6 +91,7 @@ def create_payment_intent():
                 'subtotal': str(subtotal),
                 'tax': str(tax),
                 'shipping': str(shipping_cost),
+                'delivery_option': rate.name if rate else '',
             }
         )
         session['pending_payment_intent'] = intent.id
@@ -127,15 +129,41 @@ def confirm_order():
 
     total = subtotal + tax + shipping_cost
 
+    # Ask Stripe whether this payment really went through before saving an order.
+    if not payment_intent_id:
+        return jsonify({'error': 'Missing payment. Please try again.'}), 400
+    stripe.api_key = current_app.config.get('STRIPE_SECRET_KEY')
+    status = 'processing'
+    charge_id = None
+    livemode = None
+    try:
+        intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+    except stripe.error.InvalidRequestError:
+        return jsonify({'error': 'We could not find your payment. Please try again.'}), 400
+    except stripe.error.StripeError:
+        # Stripe unreachable: keep the order as pending; the webhook marks it paid.
+        intent = None
+        status = 'pending'
+    if intent is not None:
+        if intent.status not in ('succeeded', 'processing', 'requires_capture'):
+            return jsonify({'error': 'Your payment was not completed. Please try again.'}), 400
+        if intent.status != 'succeeded':
+            status = 'pending'
+        charge_id = intent.get('latest_charge')
+        livemode = bool(intent.get('livemode'))
+
     order = Order(
         order_number=generate_order_number(),
         user_id=current_user.id if current_user.is_authenticated else None,
-        status='processing',
+        status=status,
         subtotal=subtotal,
         tax=tax,
         shipping_cost=shipping_cost,
         total=total,
         stripe_payment_intent_id=payment_intent_id,
+        stripe_charge_id=charge_id,
+        stripe_livemode=livemode,
+        shipping_method=rate.name if rate else None,
     )
     db.session.add(order)
     db.session.flush()

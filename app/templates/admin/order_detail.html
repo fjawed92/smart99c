@@ -11,6 +11,16 @@
   <span class="text-muted small">Placed {{ order.created_at.strftime('%B %d, %Y at %I:%M %p') }}</span>
 </div>
 
+<div class="alert {% if order.is_pickup %}alert-success{% elif order.is_pickup is none %}alert-warning{% else %}alert-primary{% endif %} d-flex align-items-center gap-3 mb-4">
+  <i class="bi {% if order.is_pickup %}bi-shop{% else %}bi-truck{% endif %} fs-3"></i>
+  <div>
+    <div class="fw-700 fs-5">
+      {% if order.is_pickup %}STORE PICKUP{% elif order.is_pickup is none %}PICKUP OR DELIVERY?{% else %}DELIVERY{% endif %}
+    </div>
+    <div class="small">{{ order.fulfillment_label }}{% if order.is_pickup is none %} — call or email the customer to confirm.{% endif %}</div>
+  </div>
+</div>
+
 <div class="row g-4">
   <div class="col-lg-8">
 
@@ -41,7 +51,7 @@
     {% if order.shipping_address %}
     <div class="card border-0 shadow-sm mb-4">
       <div class="card-header bg-white border-0 pt-3">
-        <h6 class="fw-700 mb-0">Shipping Address</h6>
+        <h6 class="fw-700 mb-0">{% if order.is_pickup %}Customer{% else %}Delivery Address{% endif %}</h6>
       </div>
       <div class="card-body">
         <p class="mb-1 fw-600">{{ order.shipping_address.full_name }}</p>
@@ -62,6 +72,17 @@
         <h6 class="fw-700 mb-0">Payment</h6>
       </div>
       <div class="card-body">
+        {% if not stripe_livemode %}
+        <div class="alert alert-warning small py-2">
+          <strong>Test mode payment.</strong> No real money was charged. In Stripe, switch on
+          <em>Test mode</em> (top-right) to see it.
+        </div>
+        {% endif %}
+        {% if stripe_url %}
+        <a href="{{ stripe_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary mb-3">
+          <i class="bi bi-box-arrow-up-right me-1"></i>View this payment in Stripe
+        </a>
+        {% endif %}
         {% if order.stripe_payment_intent_id %}
         <p class="mb-1 text-muted small">Payment Intent: <code>{{ order.stripe_payment_intent_id }}</code></p>
         {% endif %}
