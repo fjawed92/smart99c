@@ -56,6 +56,13 @@ def create_app(config_name='default'):
     # while the site is in use (there's no separate background worker).
     from app.services.pickup import process_holds, format_local
     app.jinja_env.filters['local_time'] = format_local
+
+    def pct(value, places=2):
+        """10 → '10%', 8.875 → '8.875%', 12.50 → '12.5%'."""
+        from decimal import Decimal
+        text = f'{Decimal(str(value or 0)):.{places}f}'.rstrip('0').rstrip('.')
+        return f'{text}%'
+    app.jinja_env.filters['pct'] = pct
     last_hold_check = {'at': None}
 
     @app.before_request
@@ -122,12 +129,31 @@ def create_app(config_name='default'):
                 if line.strip():
                     hours.append((day.strip(), time.strip()) if sep else (line.strip(), ''))
             store['hours'] = hours or STORE['hours']
-        try:
-            threshold = float(setting('free_shipping_threshold', '') or 0)
-            if threshold > 0:
-                store['free_delivery_over'] = int(threshold) if threshold.is_integer() else threshold
-        except ValueError:
-            pass
+        # "Free delivery over $X" comes from the free delivery option's minimum
+        # order (Admin → Shipping), so the banner always matches checkout.
+        store['free_delivery_over'] = None
+        cash_pct = 0
+        sale_banners = []
+        if db_ok:
+            try:
+                from app.models import ShippingRate, is_pickup_option
+                from app.services import pricing
+                free = [r for r in ShippingRate.query.filter_by(is_active=True).all()
+                        if r.price == 0 and r.min_order_amount and not is_pickup_option(r.name)]
+                if free:
+                    over = min(r.min_order_amount for r in free)
+                    store['free_delivery_over'] = f'{over:.2f}'.removesuffix('.00')
+                if setting('cash_pickup_active', '1') == '1':
+                    cash_pct = pricing.cash_discount_percent()
+                for sale in pricing.running_sales():
+                    if sale.show_banner:
+                        where = f'{sale.category.name} ' if sale.category else 'everything '
+                        sale_banners.append(f'{sale.name}: {sale.percent.normalize():f}% off {where}'.strip())
+            except SQLAlchemyError:
+                db.session.rollback()
+        cash_banner = ''
+        if cash_pct and setting('cash_discount_banner_active', '1') == '1':
+            cash_banner = f'Pay cash at pickup & save {cash_pct.normalize():f}%'
         ga_id = setting('ga_measurement_id', '').strip().upper()
         if not re.fullmatch(r'G-[A-Z0-9]{4,15}', ga_id):
             ga_id = ''
@@ -148,6 +174,9 @@ def create_app(config_name='default'):
         return dict(
             cart_count=cart_count,
             announcement=announcement,
+            sale_banners=sale_banners,
+            cash_banner=cash_banner,
+            cash_discount_pct=cash_pct,
             nav_categories=categories,
             footer_social=footer_social,
             stripe_public_key=app.config.get('STRIPE_PUBLIC_KEY', ''),

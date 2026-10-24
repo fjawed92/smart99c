@@ -118,8 +118,33 @@ class Product(db.Model):
         return [img for img in self.images if img.variant_id is None]
 
     @property
+    def sale_percent(self):
+        """% off from a running store-wide or category sale (Admin → Discounts)."""
+        from app.services.pricing import sale_percent_for
+        return sale_percent_for(self)
+
+    def price_for(self, variant=None):
+        """What the shopper pays for one, with any running sale taken off."""
+        from app.services.pricing import apply_percent
+        base = variant.effective_price if variant is not None else self.price
+        return apply_percent(base, self.sale_percent)
+
+    @property
+    def current_price(self):
+        return self.price_for()
+
+    @property
+    def was_price(self):
+        """The crossed-out price, or None when nothing is on sale."""
+        if self.compare_price and self.compare_price > self.current_price:
+            return self.compare_price
+        if self.sale_percent:
+            return self.price
+        return None
+
+    @property
     def is_on_sale(self):
-        return bool(self.compare_price and self.compare_price > self.price)
+        return self.was_price is not None
 
     @property
     def active_variants(self):
@@ -145,8 +170,9 @@ class Product(db.Model):
 
     @property
     def discount_percent(self):
-        if self.is_on_sale:
-            return int(((self.compare_price - self.price) / self.compare_price) * 100)
+        was = self.was_price
+        if was:
+            return int(((was - self.current_price) / was) * 100)
         return 0
 
     def __repr__(self):
@@ -177,6 +203,10 @@ class ProductVariant(db.Model):
     @property
     def effective_price(self):
         return self.price_override if self.price_override is not None else self.product.price
+
+    @property
+    def sale_price(self):
+        return self.product.price_for(self)
 
     @property
     def image_url(self):
@@ -238,6 +268,9 @@ class Order(db.Model):
     stripe_livemode = db.Column(db.Boolean)
     shipping_method = db.Column(db.String(100))
     service_fee = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    promo_code = db.Column(db.String(40))
+    promo_discount = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    cash_discount = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     payment_method = db.Column(db.String(20), nullable=False, default='card')  # card | cash
     pickup_deadline = db.Column(db.DateTime)   # cash pickups only (UTC)
     ready_at = db.Column(db.DateTime)
@@ -263,6 +296,10 @@ class Order(db.Model):
     @property
     def is_cash(self):
         return self.payment_method == 'cash'
+
+    @property
+    def discount_total(self):
+        return (self.promo_discount or 0) + (self.cash_discount or 0)
 
     @property
     def status_label(self):
@@ -383,6 +420,65 @@ class ShippingRate(db.Model):
 
     def __repr__(self):
         return f'<ShippingRate {self.name} ${self.price}>'
+
+
+class Sale(db.Model):
+    """A % off sale on the whole store (category_id empty) or one category."""
+    __tablename__ = 'sales'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    percent = db.Column(db.Numeric(5, 2), nullable=False)
+    category_id = db.Column(db.Integer, db.ForeignKey('categories.id', ondelete='CASCADE'), nullable=True)
+    starts_at = db.Column(db.DateTime)   # UTC; empty = right away
+    ends_at = db.Column(db.DateTime)     # UTC; empty = until turned off
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    show_banner = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    category = db.relationship('Category')
+
+    def is_running(self, now=None):
+        now = now or datetime.utcnow()
+        return bool(self.is_active and (not self.starts_at or self.starts_at <= now)
+                    and (not self.ends_at or now < self.ends_at))
+
+    @property
+    def scope_label(self):
+        return self.category.name if self.category else 'Whole store'
+
+    def __repr__(self):
+        return f'<Sale {self.name} {self.percent}%>'
+
+
+class PromoCode(db.Model):
+    __tablename__ = 'promo_codes'
+
+    KINDS = {'percent': '% off', 'amount': '$ off', 'free_shipping': 'Free delivery'}
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(40), unique=True, nullable=False, index=True)  # stored uppercase
+    kind = db.Column(db.String(20), nullable=False, default='percent')
+    value = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    min_order = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    starts_at = db.Column(db.DateTime)
+    ends_at = db.Column(db.DateTime)
+    max_uses = db.Column(db.Integer)              # empty = no limit
+    uses = db.Column(db.Integer, nullable=False, default=0)
+    once_per_customer = db.Column(db.Boolean, nullable=False, default=False)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    @property
+    def label(self):
+        if self.kind == 'percent':
+            return f'{self.value.normalize():f}% off'
+        if self.kind == 'amount':
+            return f'${self.value:.2f} off'
+        return 'Free delivery'
+
+    def __repr__(self):
+        return f'<PromoCode {self.code}>'
 
 
 class SiteSettings(db.Model):

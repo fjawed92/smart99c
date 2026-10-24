@@ -1,0 +1,317 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}Discounts{% endblock %}
+{% block page_title %}Discounts{% endblock %}
+
+{% macro status_pill(item) %}
+  {% if not item.is_active %}<span class="badge bg-secondary">Off</span>
+  {% elif item.starts_at and now < item.starts_at %}<span class="badge bg-info text-dark">Starts {{ item.starts_at|local_time('%b %-d') }}</span>
+  {% elif item.ends_at and now >= item.ends_at %}<span class="badge bg-secondary">Ended</span>
+  {% elif item.max_uses is defined and item.max_uses is not none and item.uses >= item.max_uses %}<span class="badge bg-secondary">Used up</span>
+  {% else %}<span class="badge bg-success">Running</span>{% endif %}
+{% endmacro %}
+
+
+{% block content %}
+<nav class="discount-jump mb-4" aria-label="Sections">
+  <a href="#cash" class="btn btn-sm btn-outline-secondary">Cash discount</a>
+  <a href="#sales" class="btn btn-sm btn-outline-secondary">Sales</a>
+  <a href="#promos" class="btn btn-sm btn-outline-secondary">Promo codes</a>
+</nav>
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm h-100"><div class="card-body">
+    <div class="kpi-label">Cash discount</div>
+    <div class="kpi-value">{{ cash_percent|pct if cash_percent else 'Off' }}</div>
+    <div class="kpi-sub">{% if not cash_pickup_on %}Cash pickup is turned off{% else %}on cash pickups{% endif %}</div>
+  </div></div></div>
+  <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm h-100"><div class="card-body">
+    <div class="kpi-label">Running sales</div>
+    <div class="kpi-value">{{ running_count }}</div>
+    <div class="kpi-sub">of {{ sales|length }} saved</div>
+  </div></div></div>
+  <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm h-100"><div class="card-body">
+    <div class="kpi-label">Orders with a discount</div>
+    <div class="kpi-value">{{ stats[0] }}</div>
+    <div class="kpi-sub">all time</div>
+  </div></div></div>
+  <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm h-100"><div class="card-body">
+    <div class="kpi-label">Given away</div>
+    <div class="kpi-value">${{ "%.2f"|format(stats[1] + stats[2]) }}</div>
+    <div class="kpi-sub">${{ "%.2f"|format(stats[1]) }} codes · ${{ "%.2f"|format(stats[2]) }} cash</div>
+  </div></div></div>
+</div>
+
+<!-- Cash discount + stacking -->
+<div class="card border-0 shadow-sm mb-4" id="cash">
+  <div class="card-header bg-white border-0 pt-3">
+    <h6 class="fw-700 mb-0">Cash pickup discount</h6>
+    <p class="small text-muted mb-0 mt-1">Customers who choose "Pick up · Pay cash in store" get this % off their items. Other cash pickup rules (hold time, largest order) are in <a href="{{ url_for('admin.settings') }}#cash-pickup">Settings</a>.</p>
+  </div>
+  <div class="card-body">
+    {% if not cash_pickup_on %}
+    <div class="alert alert-warning small"><i class="bi bi-exclamation-triangle me-1"></i>Pay cash at pickup is turned off in <a href="{{ url_for('admin.settings') }}#cash-pickup">Settings</a>, so this discount won't show until you turn it on.</div>
+    {% endif %}
+    <form method="POST" action="{{ url_for('admin.discount_settings') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <div class="row g-3 align-items-end">
+        <div class="col-sm-5 col-lg-3">
+          <label class="form-label" for="cash_discount_percent">Cash discount</label>
+          <div class="input-group">
+            <input type="number" id="cash_discount_percent" name="cash_discount_percent" class="form-control"
+                   value="{{ cash_percent|pct|replace('%', '') if cash_percent else '0' }}" min="0" max="99" step="0.5" inputmode="decimal" />
+            <span class="input-group-text">% off</span>
+          </div>
+          <small class="text-muted">0 = no cash discount.</small>
+        </div>
+        <div class="col-sm-7 col-lg-9">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="cash_discount_banner_active" name="cash_discount_banner_active" {% if banner_on %}checked{% endif %}>
+            <label class="form-check-label" for="cash_discount_banner_active">Tell customers in the scrolling banner at the top of the site</label>
+          </div>
+          <small class="text-muted d-block">It's always shown at checkout, on product pages and in the cart.</small>
+        </div>
+      </div>
+
+      <fieldset class="mt-4">
+        <legend class="fs-6 fw-700 mb-1">When a customer uses a promo code AND pays cash</legend>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="discount_stacking" id="stack_yes" value="stack" {% if stacking != 'best' %}checked{% endif %}>
+          <label class="form-check-label" for="stack_yes"><strong>Give both.</strong> The code comes off first, then the cash % comes off what's left.</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="discount_stacking" id="stack_best" value="best" {% if stacking == 'best' %}checked{% endif %}>
+          <label class="form-check-label" for="stack_best"><strong>Only the bigger one.</strong> The customer gets whichever saves them more, never both.</label>
+        </div>
+      </fieldset>
+      <p class="small text-muted mt-2 mb-3">Store-wide and category sales always apply first, on the item price. If two sales cover the same item, the bigger one wins.</p>
+      <button type="submit" class="btn btn-primary">Save</button>
+    </form>
+  </div>
+</div>
+
+<!-- Sales -->
+<div class="row g-4 mb-4" id="sales">
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white border-0 pt-3">
+        <h6 class="fw-700 mb-0">Sales</h6>
+        <p class="small text-muted mb-0 mt-1">% off the whole store or one category. Prices on the site drop automatically while it runs.</p>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-hover align-middle mb-0 table-stack">
+          <thead class="table-light"><tr><th>Sale</th><th>Off</th><th>On</th><th>Dates</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+          {% for sale in sales %}
+            <tr class="{% if edit_sale and edit_sale.id == sale.id %}table-warning{% endif %}">
+              <td class="fw-600 stack-title">{{ sale.name }}{% if sale.show_banner %} <i class="bi bi-megaphone text-muted small" title="Shown in the site banner"></i>{% endif %}</td>
+              <td data-label="Off">{{ sale.percent|pct }}</td>
+              <td data-label="On">{{ sale.scope_label }}</td>
+              <td data-label="Dates" class="small text-muted">{{ sale.starts_at|local_time('%b %-d') if sale.starts_at else 'Now' }} – {{ local_day(sale.ends_at, end=True) if sale.ends_at else 'no end' }}</td>
+              <td data-label="Status">{{ status_pill(sale) }}</td>
+              <td class="stack-actions text-nowrap">
+                <a href="{{ url_for('admin.discounts', edit_sale=sale.id) }}#sales" class="btn btn-sm btn-outline-secondary btn-icon" aria-label="Edit {{ sale.name }}"><i class="bi bi-pencil"></i></a>
+                <form method="POST" action="{{ url_for('admin.toggle_sale', sale_id=sale.id) }}" class="d-inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                  <button class="btn btn-sm btn-outline-secondary" type="submit">{{ 'Turn off' if sale.is_active else 'Turn on' }}</button>
+                </form>
+                <form method="POST" action="{{ url_for('admin.delete_sale', sale_id=sale.id) }}" class="d-inline" onsubmit="return confirm('Delete this sale?');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                  <button class="btn btn-sm btn-outline-danger btn-icon" type="submit" aria-label="Delete {{ sale.name }}"><i class="bi bi-trash"></i></button>
+                </form>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="6" class="text-center py-4 text-muted">No sales yet. Add one, e.g. "Eid sale · 15% off everything".</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 pt-3">
+        <h6 class="fw-700 mb-0">{% if edit_sale %}Edit "{{ edit_sale.name }}"{% else %}Add a sale{% endif %}</h6>
+      </div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('admin.save_sale', sale_id=edit_sale.id) if edit_sale else url_for('admin.save_sale') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <div class="mb-3">
+            <label class="form-label" for="sale_name">Name *</label>
+            <input type="text" id="sale_name" name="name" class="form-control" maxlength="100" required
+                   value="{{ edit_sale.name if edit_sale else '' }}" placeholder="e.g. Eid sale" />
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-5">
+              <label class="form-label" for="sale_percent">% off *</label>
+              <div class="input-group">
+                <input type="number" id="sale_percent" name="percent" class="form-control" min="1" max="99" step="0.5" required inputmode="decimal"
+                       value="{{ edit_sale.percent|pct|replace('%', '') if edit_sale else '' }}" />
+                <span class="input-group-text">%</span>
+              </div>
+            </div>
+            <div class="col-7">
+              <label class="form-label" for="sale_category">On</label>
+              <select id="sale_category" name="category_id" class="form-select">
+                <option value="">Whole store</option>
+                {% for c in categories %}
+                <option value="{{ c.id }}" {% if edit_sale and edit_sale.category_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="row g-2 mb-1">
+            <div class="col-6">
+              <label class="form-label" for="sale_starts">Starts</label>
+              <input type="date" id="sale_starts" name="starts_on" class="form-control" value="{{ local_day(edit_sale.starts_at) if edit_sale else '' }}" />
+            </div>
+            <div class="col-6">
+              <label class="form-label" for="sale_ends">Ends (last day)</label>
+              <input type="date" id="sale_ends" name="ends_on" class="form-control" value="{{ local_day(edit_sale.ends_at, end=True) if edit_sale else '' }}" />
+            </div>
+          </div>
+          <small class="text-muted d-block mb-3">Leave blank to start now / run until you turn it off.</small>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="sale_active" name="is_active" {% if not edit_sale or edit_sale.is_active %}checked{% endif %}>
+            <label class="form-check-label" for="sale_active">On</label>
+          </div>
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="sale_banner" name="show_banner" {% if not edit_sale or edit_sale.show_banner %}checked{% endif %}>
+            <label class="form-check-label" for="sale_banner">Announce it in the site banner</label>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">{% if edit_sale %}Save changes{% else %}Add sale{% endif %}</button>
+          {% if edit_sale %}<a href="{{ url_for('admin.discounts') }}#sales" class="btn btn-outline-secondary w-100 mt-2">Cancel</a>{% endif %}
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Promo codes -->
+<div class="row g-4" id="promos">
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white border-0 pt-3">
+        <h6 class="fw-700 mb-0">Promo codes</h6>
+        <p class="small text-muted mb-0 mt-1">Customers type these at checkout. Share them on flyers, Instagram or WhatsApp.</p>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-hover align-middle mb-0 table-stack">
+          <thead class="table-light"><tr><th>Code</th><th>Gives</th><th>Min. order</th><th>Used</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+          {% for promo in promos %}
+            <tr class="{% if edit_promo and edit_promo.id == promo.id %}table-warning{% endif %}">
+              <td class="stack-title"><span class="mono fw-700">{{ promo.code }}</span>
+                {% if promo.once_per_customer %}<div class="small text-muted">once per customer</div>{% endif %}
+                {% if promo.ends_at %}<div class="small text-muted">until {{ local_day(promo.ends_at, end=True) }}</div>{% endif %}</td>
+              <td data-label="Gives">{{ promo.label }}</td>
+              <td data-label="Min. order">{% if promo.min_order and promo.min_order > 0 %}${{ "%.2f"|format(promo.min_order) }}{% else %}—{% endif %}</td>
+              <td data-label="Used">{{ promo.uses }}{% if promo.max_uses %} / {{ promo.max_uses }}{% endif %}</td>
+              <td data-label="Status">{{ status_pill(promo) }}</td>
+              <td class="stack-actions text-nowrap">
+                <a href="{{ url_for('admin.discounts', edit_promo=promo.id) }}#promos" class="btn btn-sm btn-outline-secondary btn-icon" aria-label="Edit {{ promo.code }}"><i class="bi bi-pencil"></i></a>
+                <form method="POST" action="{{ url_for('admin.toggle_promo', promo_id=promo.id) }}" class="d-inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                  <button class="btn btn-sm btn-outline-secondary" type="submit">{{ 'Turn off' if promo.is_active else 'Turn on' }}</button>
+                </form>
+                <form method="POST" action="{{ url_for('admin.delete_promo', promo_id=promo.id) }}" class="d-inline" onsubmit="return confirm('Delete {{ promo.code }}?');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                  <button class="btn btn-sm btn-outline-danger btn-icon" type="submit" aria-label="Delete {{ promo.code }}"><i class="bi bi-trash"></i></button>
+                </form>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="6" class="text-center py-4 text-muted">No promo codes yet.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 pt-3">
+        <h6 class="fw-700 mb-0">{% if edit_promo %}Edit {{ edit_promo.code }}{% else %}Add a promo code{% endif %}</h6>
+      </div>
+      <div class="card-body">
+        {% set kind = edit_promo.kind if edit_promo else 'percent' %}
+        <form method="POST" action="{{ url_for('admin.save_promo', promo_id=edit_promo.id) if edit_promo else url_for('admin.save_promo') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <div class="mb-3">
+            <label class="form-label" for="promo_code">Code *</label>
+            <input type="text" id="promo_code" name="code" class="form-control mono text-uppercase" maxlength="40" required
+                   value="{{ edit_promo.code if edit_promo else '' }}" placeholder="e.g. EID10" autocapitalize="characters" />
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-7">
+              <label class="form-label" for="promo_kind">Gives</label>
+              <select id="promo_kind" name="kind" class="form-select">
+                <option value="percent" {% if kind == 'percent' %}selected{% endif %}>% off the items</option>
+                <option value="amount" {% if kind == 'amount' %}selected{% endif %}>$ off the order</option>
+                <option value="free_shipping" {% if kind == 'free_shipping' %}selected{% endif %}>Free delivery</option>
+              </select>
+            </div>
+            <div class="col-5" id="promoValueWrap">
+              <label class="form-label" for="promo_value">Amount</label>
+              <input type="number" id="promo_value" name="value" class="form-control" min="0" step="0.01" inputmode="decimal"
+                     value="{{ edit_promo.value|float if edit_promo and edit_promo.kind != 'free_shipping' else '' }}" placeholder="10" />
+            </div>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label" for="promo_min">Min. order</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" id="promo_min" name="min_order" class="form-control" min="0" step="0.01" inputmode="decimal"
+                       value="{{ edit_promo.min_order|float if edit_promo and edit_promo.min_order else '' }}" placeholder="0" />
+              </div>
+            </div>
+            <div class="col-6">
+              <label class="form-label" for="promo_max">Total uses</label>
+              <input type="number" id="promo_max" name="max_uses" class="form-control" min="1" step="1" inputmode="numeric"
+                     value="{{ edit_promo.max_uses if edit_promo and edit_promo.max_uses else '' }}" placeholder="No limit" />
+            </div>
+          </div>
+          <div class="row g-2 mb-1">
+            <div class="col-6">
+              <label class="form-label" for="promo_starts">Starts</label>
+              <input type="date" id="promo_starts" name="starts_on" class="form-control" value="{{ local_day(edit_promo.starts_at) if edit_promo else '' }}" />
+            </div>
+            <div class="col-6">
+              <label class="form-label" for="promo_ends">Ends (last day)</label>
+              <input type="date" id="promo_ends" name="ends_on" class="form-control" value="{{ local_day(edit_promo.ends_at, end=True) if edit_promo else '' }}" />
+            </div>
+          </div>
+          <small class="text-muted d-block mb-3">Leave blank to start now / never expire.</small>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="promo_once" name="once_per_customer" {% if edit_promo and edit_promo.once_per_customer %}checked{% endif %}>
+            <label class="form-check-label" for="promo_once">Once per customer (checked by email)</label>
+          </div>
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="promo_active" name="is_active" {% if not edit_promo or edit_promo.is_active %}checked{% endif %}>
+            <label class="form-check-label" for="promo_active">On</label>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">{% if edit_promo %}Save changes{% else %}Add code{% endif %}</button>
+          {% if edit_promo %}<a href="{{ url_for('admin.discounts') }}#promos" class="btn btn-outline-secondary w-100 mt-2">Cancel</a>{% endif %}
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  const kind = document.getElementById('promo_kind');
+  const wrap = document.getElementById('promoValueWrap');
+  const label = wrap.querySelector('label');
+  function sync() {
+    wrap.classList.toggle('d-none', kind.value === 'free_shipping');
+    label.textContent = kind.value === 'amount' ? '$ off' : '% off';
+  }
+  kind.addEventListener('change', sync);
+  sync();
+})();
+</script>
+{% endblock %}

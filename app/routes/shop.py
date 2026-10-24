@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, abort, current_app, g
 from app.models import Product, Category
 from app.extensions import db
+from app.services.pricing import sale_category_ids
 
 shop_bp = Blueprint('shop', __name__)
 
@@ -44,7 +45,13 @@ def _product_list(category_slug=None, current_category=None):
     if max_price is not None:
         query = query.filter(Product.price <= max_price)
     if deals:
-        query = query.filter(Product.compare_price.isnot(None), Product.compare_price > Product.price)
+        # Marked-down products, plus everything in a running sale (Admin → Discounts).
+        whole_store, sale_cats = sale_category_ids()
+        if not whole_store:
+            on_sale = db.and_(Product.compare_price.isnot(None), Product.compare_price > Product.price)
+            if sale_cats:
+                on_sale = db.or_(on_sale, Product.category_id.in_(sale_cats))
+            query = query.filter(on_sale)
 
     sort_map = {
         'newest': Product.created_at.desc(),

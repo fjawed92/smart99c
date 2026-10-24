@@ -85,7 +85,7 @@
   <div class="steps" id="pickup">
     <div class="step"><div class="k">1</div><h3>Shop online</h3><p>Add toys, games and cards to your cart any time, day or night.</p></div>
     <div class="step"><div class="k">2</div><h3>We pack it</h3><p>Your order is ready at the counter in {{ store.pickup_time }}.</p></div>
-    <div class="step"><div class="k">3</div><h3>Grab &amp; go</h3><p>Show your order number at {{ store.address_short }}, or get free local delivery over ${{ store.free_delivery_over }}.</p></div>
+    <div class="step"><div class="k">3</div><h3>Grab &amp; go</h3><p>Show your order number at {{ store.address_short }}{% if store.free_delivery_over %}, or get free local delivery over ${{ store.free_delivery_over }}{% endif %}.</p></div>
   </div>
 </div></section>
 

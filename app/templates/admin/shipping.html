@@ -8,31 +8,37 @@
   <div class="col-lg-7">
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white border-0 pt-3">
-        <h6 class="fw-700 mb-0">Current Shipping Rates</h6>
+        <h6 class="fw-700 mb-0">Pickup &amp; delivery options</h6>
+        <p class="small text-muted mb-0 mt-1">Customers see the options that are on. Any option with "pickup" in its name is store pickup.</p>
       </div>
       <div class="card-body p-0">
         <div class="table-responsive">
-          <table class="table table-hover align-middle mb-0">
+          <table class="table table-hover align-middle mb-0 table-stack">
             <thead class="table-light">
-              <tr><th>Name</th><th>Price</th><th>Min Order</th><th>Est. Days</th><th>Active</th><th></th></tr>
+              <tr><th>Name</th><th>Price</th><th>Only for orders over</th><th>Est. time</th><th>On?</th><th></th></tr>
             </thead>
             <tbody>
               {% for rate in rates %}
-              <tr>
-                <td class="fw-600">{{ rate.name }}</td>
-                <td>{% if rate.price == 0 %}FREE{% else %}${{ "%.2f"|format(rate.price) }}{% endif %}</td>
-                <td class="text-muted">${{ "%.2f"|format(rate.min_order_amount) }}</td>
-                <td class="text-muted">{{ rate.estimated_days or '—' }}</td>
-                <td>
-                  <span class="badge {% if rate.is_active %}bg-success{% else %}bg-secondary{% endif %}">
-                    {{ 'Active' if rate.is_active else 'Off' }}
-                  </span>
+              <tr class="{% if editing and editing.id == rate.id %}table-warning{% endif %}">
+                <td class="fw-600 stack-title">{{ rate.name }}</td>
+                <td data-label="Price">{% if rate.price == 0 %}FREE{% else %}${{ "%.2f"|format(rate.price) }}{% endif %}</td>
+                <td data-label="Only for orders over" class="text-muted">{% if rate.min_order_amount and rate.min_order_amount > 0 %}${{ "%.2f"|format(rate.min_order_amount) }}{% else %}Any order{% endif %}</td>
+                <td data-label="Est. time" class="text-muted">{{ rate.estimated_days or '—' }}</td>
+                <td data-label="On?">
+                  <form method="POST" action="{{ url_for('admin.toggle_shipping_rate', rate_id=rate.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                    <button type="submit" class="badge border-0 {% if rate.is_active %}bg-success{% else %}bg-secondary{% endif %} tap-badge"
+                            title="Tap to switch {{ 'off' if rate.is_active else 'on' }}">
+                      {{ 'On' if rate.is_active else 'Off' }}
+                    </button>
+                  </form>
                 </td>
-                <td>
-                  <form method="POST" action="{{ url_for('admin.delete_shipping_rate', rate_id=rate.id) }}"
+                <td class="stack-actions text-nowrap">
+                  <a href="{{ url_for('admin.shipping', edit=rate.id) }}#rateForm" class="btn btn-sm btn-outline-secondary btn-icon" aria-label="Edit {{ rate.name }}"><i class="bi bi-pencil"></i></a>
+                  <form method="POST" action="{{ url_for('admin.delete_shipping_rate', rate_id=rate.id) }}" class="d-inline"
                         onsubmit="return confirm('Delete this shipping rate?');">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                    <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                    <button type="submit" class="btn btn-sm btn-outline-danger btn-icon" aria-label="Delete {{ rate.name }}"><i class="bi bi-trash"></i></button>
                   </form>
                 </td>
               </tr>
@@ -44,54 +50,60 @@
         </div>
       </div>
     </div>
+    <p class="small text-muted mt-3">
+      <i class="bi bi-info-circle me-1"></i>For free delivery over a set amount, make a delivery option with price $0 and fill in
+      "Only for orders over". The site banner ("Free local delivery over $…") uses that amount. Promo codes and
+      cash discounts are in <a href="{{ url_for('admin.discounts') }}">Discounts</a>.
+    </p>
   </div>
 
-  <!-- Add New Rate -->
+  <!-- Add / edit rate -->
   <div class="col-lg-5">
-    <div class="card border-0 shadow-sm">
+    <div class="card border-0 shadow-sm" id="rateForm">
       <div class="card-header bg-white border-0 pt-3">
-        <h6 class="fw-700 mb-0">Add Shipping Rate</h6>
+        <h6 class="fw-700 mb-0">{% if editing %}Edit "{{ editing.name }}"{% else %}Add an option{% endif %}</h6>
       </div>
       <div class="card-body">
-        <form method="POST" action="{{ url_for('admin.new_shipping_rate') }}">
+        <form method="POST" action="{{ url_for('admin.edit_shipping_rate', rate_id=editing.id) if editing else url_for('admin.new_shipping_rate') }}">
           {{ form.hidden_tag() }}
           <div class="mb-3">
-            <label class="form-label">Rate Name *</label>
-            {{ form.name(class="form-control", placeholder="e.g. Standard Shipping") }}
+            <label class="form-label" for="name">Name *</label>
+            {{ form.name(class="form-control", placeholder="e.g. Local delivery") }}
           </div>
           <div class="row g-2 mb-3">
             <div class="col-6">
-              <label class="form-label">Price *</label>
+              <label class="form-label" for="price">Price *</label>
               <div class="input-group">
                 <span class="input-group-text">$</span>
-                {{ form.price(class="form-control", placeholder="0.00") }}
+                {{ form.price(class="form-control", placeholder="0.00", inputmode="decimal") }}
               </div>
             </div>
             <div class="col-6">
-              <label class="form-label">Free Shipping Threshold</label>
+              <label class="form-label" for="min_order_amount">Only for orders over</label>
               <div class="input-group">
                 <span class="input-group-text">$</span>
-                {{ form.min_order_amount(class="form-control", placeholder="0.00") }}
+                {{ form.min_order_amount(class="form-control", placeholder="0.00", inputmode="decimal") }}
               </div>
             </div>
           </div>
           <div class="mb-3">
-            <label class="form-label">Estimated Days</label>
-            {{ form.estimated_days(class="form-control", placeholder="e.g. 3-5 business days") }}
+            <label class="form-label" for="estimated_days">Estimated time</label>
+            {{ form.estimated_days(class="form-control", placeholder="e.g. 1–2 days") }}
           </div>
-          <div class="row g-2 mb-3">
+          <div class="row g-2 mb-3 align-items-end">
             <div class="col-6">
-              <div class="form-check form-switch mt-2">
+              <div class="form-check form-switch mb-2">
                 {{ form.is_active(class="form-check-input") }}
-                <label class="form-check-label">Active</label>
+                <label class="form-check-label" for="is_active">On (customers can pick it)</label>
               </div>
             </div>
             <div class="col-6">
-              <label class="form-label">Sort Order</label>
-              {{ form.sort_order(class="form-control form-control-sm") }}
+              <label class="form-label" for="sort_order">Show order</label>
+              {{ form.sort_order(class="form-control", inputmode="numeric") }}
             </div>
           </div>
-          <button type="submit" class="btn btn-primary w-100">Add Rate</button>
+          <button type="submit" class="btn btn-primary w-100">{% if editing %}Save changes{% else %}Add option{% endif %}</button>
+          {% if editing %}<a href="{{ url_for('admin.shipping') }}" class="btn btn-outline-secondary w-100 mt-2">Cancel</a>{% endif %}
         </form>
       </div>
     </div>

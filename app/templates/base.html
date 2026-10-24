@@ -105,10 +105,10 @@
     </div>
   </header>
 
-  {% set ticker_items = [
-      announcement,
+  {% set ticker_items = [announcement] + sale_banners + [
+      cash_banner,
       'Pokémon TCG restock ' ~ store.restock_label,
-      'Free local delivery over $' ~ store.free_delivery_over,
+      ('Free local delivery over $' ~ store.free_delivery_over) if store.free_delivery_over else '',
       'Same-day pickup in West Babylon',
       'Board games, plush & action figures',
       'Sleeves, binders & toploaders'
@@ -210,7 +210,7 @@
       <h5>Your cart</h5>
       <button class="cart-close-btn" id="cartCloseBtn" aria-label="Close cart"><i class="bi bi-x-lg"></i></button>
     </div>
-    <div class="freebar" id="freeBar" data-threshold="{{ store.free_delivery_over }}" hidden>
+    <div class="freebar" id="freeBar" data-threshold="{{ store.free_delivery_over or '' }}" hidden>
       <span id="freeBarText"></span>
       <div class="track"><div class="fill" id="freeBarFill" style="width:0"></div></div>
     </div>
@@ -233,6 +233,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/mobile.js') }}"></script>
   {% block extra_scripts %}{% endblock %}
 </body>
 </html>

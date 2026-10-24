@@ -9,38 +9,52 @@ from datetime import datetime
 from app.extensions import db
 from app.models import (Order, OrderItem, ShippingAddress, ShippingRate, Product,
                         ProductVariant, PaymentLink, is_pickup_option)
-from app.helpers import (get_cart_items, get_cart_subtotal, generate_order_number,
-                         service_fee_for, get_site_setting)
+from app.helpers import get_cart_items, generate_order_number, get_site_setting
 from app.services.visits import track_event
-from app.services import pickup
+from app.services import pickup, pricing
 
 checkout_bp = Blueprint('checkout', __name__)
 
 
-def _order_totals(rate, paid_by_card=True):
-    subtotal = get_cart_subtotal()
-    tax_rate = Decimal(str(current_app.config.get('TAX_RATE', 0.08875)))
-    tax = subtotal * tax_rate
-    shipping_cost = rate.price if rate else Decimal('0')
-    fee = service_fee_for(subtotal + tax + shipping_cost, paid_by_card)
-    total = subtotal + tax + shipping_cost + fee
-    return subtotal, tax, shipping_cost, fee, total
+def _promo_code():
+    return session.get('promo_code', '')
 
 
-def _save_order(data, items, rate, totals, **fields):
+def _quote(items, rate, cash=False, email=''):
+    return pricing.quote(items, rate, cash=cash, promo_code=_promo_code(), email=email)
+
+
+def _active_rate(rate_id):
+    try:
+        rate_id = int(rate_id or 0)
+    except (TypeError, ValueError):
+        return None
+    return ShippingRate.query.filter_by(id=rate_id, is_active=True).first() if rate_id else None
+
+
+def _active_rates():
+    return ShippingRate.query.filter_by(is_active=True)\
+        .order_by(ShippingRate.sort_order, ShippingRate.price).all()
+
+
+def _save_order(data, items, rate, q, **fields):
     """Save the order, its address and items, take the stock and empty the cart."""
-    subtotal, tax, shipping_cost, fee, total = totals
     order = Order(
         order_number=generate_order_number(),
         user_id=current_user.id if current_user.is_authenticated else None,
-        subtotal=subtotal,
-        tax=tax,
-        shipping_cost=shipping_cost,
-        service_fee=fee,
-        total=total,
+        subtotal=q['subtotal'],
+        tax=q['tax'],
+        shipping_cost=q['shipping'],
+        service_fee=q['fee'],
+        promo_code=q['promo_code'] or None,
+        promo_discount=q['promo_discount'],
+        cash_discount=q['cash_discount'],
+        total=q['total'],
         shipping_method=rate.name if rate else None,
         **fields,
     )
+    if q['promo'] is not None:
+        q['promo'].uses = (q['promo'].uses or 0) + 1
     db.session.add(order)
     db.session.flush()
 
@@ -88,12 +102,12 @@ def _save_order(data, items, rate, totals, **fields):
 
     session.pop('cart', None)
     session.pop('pending_payment_intent', None)
+    session.pop('promo_code', None)
     return order
 
 
 def _pickup_rate():
-    for rate in ShippingRate.query.filter_by(is_active=True)\
-            .order_by(ShippingRate.sort_order, ShippingRate.price).all():
+    for rate in _active_rates():
         if is_pickup_option(rate.name):
             return rate
     return None
@@ -120,8 +134,7 @@ def checkout():
         return redirect(url_for('cart.cart'))
 
     form = CheckoutForm()
-    shipping_rates = ShippingRate.query.filter_by(is_active=True)\
-        .order_by(ShippingRate.sort_order, ShippingRate.price).all()
+    shipping_rates = _active_rates()
     form.shipping_rate_id.choices = [(r.id, f'{r.name} — ${r.price} ({r.estimated_days})')
                                      for r in shipping_rates]
 
@@ -130,32 +143,79 @@ def checkout():
         form.last_name.data = current_user.last_name
         form.email.data = current_user.email
 
-    subtotal = get_cart_subtotal()
-    tax_rate = Decimal(str(current_app.config.get('TAX_RATE', 0.08875)))
-    tax = subtotal * tax_rate
+    card_quote = _quote(items, None)
+    if card_quote['promo_error']:
+        # The code stopped working (expired, cart changed…): drop it and say why.
+        flash(f'Promo code {_promo_code()} was removed: {card_quote["promo_error"]}', 'warning')
+        session.pop('promo_code', None)
+        card_quote = _quote(items, None)
 
-    # Pay-cash-at-pickup option (Admin → Settings).
+    # Pay-cash-at-pickup option (Admin → Settings / Discounts).
     cash = pickup.cash_settings()
     pickup_rate = _pickup_rate()
-    cash_total = subtotal + tax + (pickup_rate.price if pickup_rate else 0)
     cash_option = None
     if cash['active'] and pickup_rate:
+        cash_quote = _quote(items, pickup_rate, cash=True)
         cash_option = {
             'rate': pickup_rate,
-            'total': cash_total,
+            'quote': cash_quote,
+            'total': cash_quote['total'],
+            'percent': pricing.cash_discount_percent(),
             'hold_hours': cash['hold_hours'],
             'deadline': pickup.format_local(pickup.pickup_deadline(settings=cash)),
-            'blocked': pickup.cash_block_reason(cash_total, settings=cash),
+            'blocked': pickup.cash_block_reason(cash_quote['total'], settings=cash),
         }
 
+    rate_states = pricing.rate_states(shipping_rates, items, _promo_code())
     return render_template('checkout.html',
                            form=form,
                            items=items,
-                           subtotal=subtotal,
-                           tax=tax,
+                           quote=card_quote,
+                           subtotal=card_quote['subtotal'],
+                           tax=card_quote['tax'],
+                           tax_percent=pricing.tax_rate() * 100,
                            shipping_rates=shipping_rates,
+                           rate_states=rate_states,
+                           first_open_rate_id=next((r.id for r in shipping_rates
+                                                    if not rate_states.get(r.id)), None),
                            cash_option=cash_option,
                            fee_active=get_site_setting('service_fee_active', '1') == '1')
+
+
+@checkout_bp.route('/checkout/promo', methods=['POST'])
+def apply_promo():
+    data = request.get_json() or {}
+    items = get_cart_items()
+    if not items:
+        return jsonify({'error': 'Your cart is empty.'}), 400
+    if data.get('remove'):
+        session.pop('promo_code', None)
+        return jsonify({'success': True, 'message': 'Promo code removed.'})
+    code = pricing.normalize_code(data.get('code'))
+    if not code:
+        return jsonify({'error': 'Please type a promo code.'}), 400
+    email = (data.get('email') or '').strip()
+    q = pricing.quote(items, None, promo_code=code, email=email)
+    if q['promo_error']:
+        return jsonify({'error': q['promo_error']}), 400
+    if q['promo'].once_per_customer and not email:
+        return jsonify({'error': 'This code is once per customer. Please enter your email above first.'}), 400
+    session['promo_code'] = q['promo_code']
+    return jsonify({'success': True, 'code': q['promo_code'],
+                    'message': f'{q["promo_code"]} applied: {q["promo"].label}.'})
+
+
+@checkout_bp.route('/checkout/quote', methods=['POST'])
+def checkout_quote():
+    """Totals for the option the shopper picked (used for the cash option)."""
+    data = request.get_json() or {}
+    items = get_cart_items()
+    if not items:
+        return jsonify({'error': 'Your cart is empty.'}), 400
+    cash = bool(data.get('cash'))
+    rate = _pickup_rate() if cash else _active_rate(data.get('shipping_rate_id'))
+    q = _quote(items, rate, cash=cash, email=data.get('email', ''))
+    return jsonify(pricing.quote_json(q))
 
 
 @checkout_bp.route('/checkout/create-payment-intent', methods=['POST'])
@@ -168,9 +228,13 @@ def create_payment_intent():
     if not items:
         return jsonify({'error': 'Cart is empty'}), 400
 
-    rate = ShippingRate.query.get(int(shipping_rate_id)) if shipping_rate_id else None
-    subtotal, tax, shipping_cost, fee, total = _order_totals(rate)
-    amount_cents = int(total * 100)
+    rate = _active_rate(shipping_rate_id)
+    if shipping_rate_id and rate is None:
+        return jsonify({'error': 'That delivery option is not available right now.'}), 400
+    q = _quote(items, rate, email=data.get('email', ''))
+    if q['rate_error']:
+        return jsonify({'error': q['rate_error'], **pricing.quote_json(q)}), 400
+    amount_cents = int(q['total'] * 100)
 
     try:
         intent = stripe.PaymentIntent.create(
@@ -178,20 +242,17 @@ def create_payment_intent():
             currency='usd',
             automatic_payment_methods={'enabled': True},
             metadata={
-                'subtotal': str(subtotal),
-                'tax': str(tax),
-                'shipping': str(shipping_cost),
-                'service_fee': str(fee),
+                'subtotal': str(q['subtotal']),
+                'discount': str(q['discount']),
+                'promo_code': q['promo_code'],
+                'tax': str(q['tax']),
+                'shipping': str(q['shipping']),
+                'service_fee': str(q['fee']),
                 'delivery_option': rate.name if rate else '',
             }
         )
         session['pending_payment_intent'] = intent.id
-        return jsonify({'client_secret': intent.client_secret,
-                        'subtotal': float(subtotal),
-                        'tax': float(tax),
-                        'shipping': float(shipping_cost),
-                        'service_fee': float(fee),
-                        'total': float(total)})
+        return jsonify({'client_secret': intent.client_secret, **pricing.quote_json(q)})
     except stripe.error.StripeError as e:
         return jsonify({'error': str(e.user_message)}), 400
 
@@ -211,7 +272,10 @@ def confirm_order():
         return jsonify({'error': 'Cart is empty'}), 400
 
     rate = ShippingRate.query.get(shipping_rate_id) if shipping_rate_id else None
-    subtotal, tax, shipping_cost, fee, total = _order_totals(rate)
+    # The card was charged with the code applied, so keep it even if it expired
+    # or ran out in the meantime.
+    q = pricing.quote(items, rate, promo_code=_promo_code(), email=data.get('email', ''),
+                      enforce_promo=False)
 
     # Ask Stripe whether this payment really went through before saving an order.
     if not payment_intent_id:
@@ -236,7 +300,15 @@ def confirm_order():
         charge_id = intent.get('latest_charge')
         livemode = bool(intent.get('livemode'))
 
-    order = _save_order(data, items, rate, (subtotal, tax, shipping_cost, fee, total),
+    notes = None
+    charged = intent.get('amount') if intent is not None else None
+    if isinstance(charged, int) and charged != int(q['total'] * 100):
+        # Never turn away a payment that went through; flag it for the owner instead.
+        notes = (f'Check this order: Stripe charged ${charged / 100:.2f} but the order '
+                 f'adds up to ${q["total"]:.2f}.')
+
+    order = _save_order(data, items, rate, q,
+                        notes=notes,
                         status=status,
                         stripe_payment_intent_id=payment_intent_id,
                         stripe_charge_id=charge_id,
@@ -265,14 +337,19 @@ def reserve_cash():
     rate = _pickup_rate()
     if rate is None:
         return jsonify({'error': 'Store pickup is not available right now.'}), 400
-    totals = _order_totals(rate, paid_by_card=False)
+    q = _quote(items, rate, cash=True, email=data.get('email', ''))
+    if q['promo_error']:
+        session.pop('promo_code', None)
+        return jsonify({'error': f'Your promo code was removed: {q["promo_error"]} '
+                                 'Please check your total and try again.',
+                        'reload': True}), 400
     settings = pickup.cash_settings()
-    blocked = pickup.cash_block_reason(totals[-1], data.get('email', ''), data.get('phone', ''),
+    blocked = pickup.cash_block_reason(q['total'], data.get('email', ''), data.get('phone', ''),
                                        settings=settings)
     if blocked:
         return jsonify({'error': blocked}), 400
 
-    order = _save_order(data, items, rate, totals,
+    order = _save_order(data, items, rate, q,
                         status='processing',
                         payment_method='cash',
                         pickup_deadline=pickup.pickup_deadline(settings=settings))

@@ -58,6 +58,9 @@
       <a href="{{ url_for('admin.shipping') }}" class="sidebar-link {% if 'shipping' in request.endpoint %}active{% endif %}">
         <i class="bi bi-truck"></i> Shipping
       </a>
+      <a href="{{ url_for('admin.discounts') }}" class="sidebar-link {% if request.endpoint == 'admin.discounts' %}active{% endif %}">
+        <i class="bi bi-tags"></i> Discounts
+      </a>
       <a href="{{ url_for('admin.email_settings') }}" class="sidebar-link {% if 'email_settings' in request.endpoint %}active{% endif %}">
         <i class="bi bi-envelope-gear"></i> Email
       </a>
@@ -75,19 +78,21 @@
     </nav>
   </aside>
 
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
   <!-- Content -->
   <div class="admin-content">
     <div class="admin-topbar">
       <div class="d-flex align-items-center gap-3">
-        <button class="btn btn-sm btn-outline-secondary d-md-none" id="sidebarToggle">
+        <button class="btn btn-outline-secondary d-md-none sidebar-toggle" id="sidebarToggle" aria-label="Menu" aria-controls="adminSidebar" aria-expanded="false">
           <i class="bi bi-list"></i>
         </button>
         <h1 class="admin-title">{% block page_title %}Dashboard{% endblock %}</h1>
       </div>
       <div class="d-flex align-items-center gap-3">
         <span class="text-muted small d-none d-md-inline">{{ current_user.full_name }}</span>
-        <a href="{{ url_for('orders.account') }}" class="btn btn-sm btn-outline-secondary">
-          <i class="bi bi-person me-1"></i>Profile
+        <a href="{{ url_for('orders.account') }}" class="btn btn-sm btn-outline-secondary topbar-profile" aria-label="Profile">
+          <i class="bi bi-person"></i><span class="d-none d-sm-inline ms-1">Profile</span>
         </a>
       </div>
     </div>
@@ -109,10 +114,21 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='js/mobile.js') }}"></script>
 <script>
-  document.getElementById('sidebarToggle')?.addEventListener('click', () => {
-    document.getElementById('adminSidebar').classList.toggle('open');
-  });
+  (function () {
+    const sidebar = document.getElementById('adminSidebar');
+    const backdrop = document.getElementById('sidebarBackdrop');
+    const toggle = document.getElementById('sidebarToggle');
+    function setOpen(open) {
+      sidebar.classList.toggle('open', open);
+      backdrop.classList.toggle('show', open);
+      toggle?.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    toggle?.addEventListener('click', () => setOpen(!sidebar.classList.contains('open')));
+    backdrop.addEventListener('click', () => setOpen(false));
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') setOpen(false); });
+  })();
 </script>
 {% block extra_scripts %}{% endblock %}
 </body>

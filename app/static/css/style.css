@@ -567,7 +567,7 @@ a.tile:hover { transform: translate(-2px, -2px); box-shadow: var(--pop-lg); colo
 .msearch { width: 100%; min-height: 48px; box-shadow: 3px 3px 0 var(--ink); border-radius: 12px; }
 .msearch input { width: 100%; font-size: 16px; padding: 10px 8px; } /* 16px stops iPhone zooming in */
 .msearch input::-webkit-search-cancel-button { display: none; }
-.msearch button { min-width: 32px; min-height: 44px; font-size: 18px; }
+.msearch button { min-width: 44px; min-height: 44px; font-size: 18px; }
 
 /* Home: "Shop by price" */
 .shopby { margin-top: 36px; display: grid; gap: 14px; }
@@ -667,3 +667,96 @@ a.tile:hover { transform: translate(-2px, -2px); box-shadow: var(--pop-lg); colo
   .price-main { font-size: 48px; }
   .product-detail-title { font-size: clamp(34px, 10vw, 56px); }
 }
+
+/* ============================================================
+   Phone fixes (audit, Oct 2026) + discount UI
+   ============================================================ */
+.min-w-0 { min-width: 0; }
+
+/* Discounts: cart tip, checkout promo box, locked delivery options */
+.cash-tip { background: var(--ok-soft, #e3f4ea); border: 2px solid var(--ink); border-radius: 10px; padding: 10px 12px; font-size: .92rem; }
+.promo-form { display: flex; gap: 8px; }
+.promo-form .form-control { text-transform: uppercase; min-width: 0; flex: 1; }
+.promo-form .btn { flex: none; }
+.promo-applied { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+                 border: 2px dashed var(--ok, #1d7a46); border-radius: 10px; padding: 10px 12px; background: var(--white); }
+.shipping-option.is-locked { opacity: .6; cursor: not-allowed; }
+.shipping-option.is-locked .shipping-option-content { background: var(--paper); }
+
+/* Checkout summary: a tap-to-open bar on phones, always open on desktop */
+.summary-toggle { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px;
+                  background: none; border: 0; padding: 0; font-weight: 700; color: var(--ink); text-align: left; min-height: 44px; }
+@media (max-width: 991.98px) {
+  .summary-details { display: none; margin-top: 16px; }
+  .summary-details.open { display: block; }
+  .order-summary .summary-total-row { display: none !important; }
+  .order-summary .card-body { padding: 12px 16px; }
+}
+
+/* Shop: on phones the category chips come first and search/price fold away */
+.shop-filters-toggle { display: none; }
+@media (max-width: 1060px) {
+  .filters { gap: 12px; }
+  .filters .filter-cats { order: -1; }
+  .shop-filters-toggle { display: flex; align-items: center; justify-content: center; min-height: 44px; }
+  .shop-collapse { display: none; }
+  .shop-collapse.open { display: block; }
+}
+
+/* Stacked tables: one card per row on phones (labels come from mobile.js) */
+@media (max-width: 767.98px) {
+  .table-responsive:has(> .table-stack) { overflow-x: visible; }
+  .table-stack thead { display: none; }
+  .table-stack, .table-stack tbody, .table-stack tr { display: block; width: 100%; }
+  .table-stack tr { padding: 12px 14px; border-bottom: 2px solid var(--hair); }
+  .table-stack tbody tr:last-child { border-bottom: 0; }
+  .table-stack td { display: flex; justify-content: space-between; align-items: center; gap: 12px;
+                    padding: 4px 0 !important; border: 0 !important; text-align: right; background: none !important; }
+  .table-stack td::before { content: attr(data-label); flex: none; text-align: left; color: var(--muted);
+                            font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+  .table-stack td[data-label=""]::before, .table-stack td.stack-title::before,
+  .table-stack td.stack-actions::before, .table-stack td.stack-full::before { display: none; }
+  .table-stack td.stack-title { display: block; text-align: left; font-size: 1.02rem; padding-bottom: 6px !important; }
+  .table-stack td.stack-actions { justify-content: flex-start; flex-wrap: wrap; padding-top: 10px !important; }
+  .table-stack td.stack-actions > .d-flex { flex-wrap: wrap; }
+  .table-stack td[data-label=""]:not(.stack-actions):not(.stack-title) { justify-content: flex-end; }
+  .table-stack td.stack-full { display: block; text-align: center; }
+  .table-stack td.stack-inline { display: inline-flex; width: auto; vertical-align: middle; margin-right: 10px; }
+  .table-stack td.stack-inline-title { display: inline-block; width: calc(100% - 110px); vertical-align: middle; }
+  .table-stack td > br { display: none; }
+  .table-stack .form-check-input { width: 1.6em; height: 1.6em; }
+  .table-stack .form-switch .form-check-input { width: 2.8em; }
+}
+
+/* Cart: product on top, then quantity / total / remove in one row */
+@media (max-width: 575.98px) {
+  .cart-table thead { display: none; }
+  .cart-table, .cart-table tbody { display: block; }
+  .cart-table tr { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px 12px;
+                   padding: 14px; border-bottom: 2px solid var(--hair); }
+  .cart-table td { border: 0 !important; padding: 0 !important; }
+  .cart-table .cart-cell-product { grid-column: 1 / -1; }
+  .cart-table .cart-cell-qty .quantity-selector { margin: 0 !important; }
+  .cart-table .cart-cell-total { font-size: 1.1rem; }
+}
+
+/* Thumb-sized taps on touch screens */
+@media (hover: none), (max-width: 767.98px) {
+  .btn-sm { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; }
+  .btn-icon { min-width: 40px; }
+  .form-check-input { width: 1.35em; height: 1.35em; margin-top: .1em; }
+  .form-switch .form-check-input { width: 2.4em; }
+  .form-check { min-height: 1.8em; }
+  .form-check-label { padding-left: .25em; }
+  .product-category-tag { display: inline-block; padding: 6px 0; }
+  .remove-from-cart-btn { min-width: 44px; min-height: 44px; }
+  .qty-input { font-size: 16px; }
+  input.form-control, select.form-select, textarea.form-control { font-size: 16px; }
+  .list-group-item-action { padding-block: .8rem; }
+  .tap-badge { min-height: 32px; padding-inline: 12px; }
+}
+/* Delivery choices: keep the price label inside the box on narrow screens */
+.shipping-option-content > .d-flex { gap: 10px; }
+.shipping-option-content > .d-flex > div { min-width: 0; }
+.shipping-option-content > .d-flex > span { flex: none; text-align: right; }
+.shipping-option .badge { white-space: normal; text-align: left; line-height: 1.4; }

@@ -82,7 +82,7 @@
 <div class="card border-0 shadow-sm">
   <div class="card-body p-0">
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
+      <table class="table table-hover align-middle mb-0 table-stack">
         <thead class="table-light">
           <tr>
             <th>Order</th>
@@ -97,7 +97,7 @@
           {% for order in orders %}
           {% set addr = order.shipping_address %}
           <tr>
-            <td>
+            <td class="stack-title">
               <a href="{{ url_for('admin.order_detail', order_id=order.id) }}" class="fw-800 text-decoration-none">{{ order.order_number }}</a>
               <div class="small text-muted">{{ order.created_at|local_time('%b %-d, %-I:%M %p') }}</div>
             </td>
@@ -130,7 +130,7 @@
               {% endif %}
             </td>
             <td class="fw-700">${{ "%.2f"|format(order.total) }}</td>
-            <td>
+            <td class="stack-actions">
               {% if order.is_open %}
               <div class="d-flex flex-wrap gap-1">
                 {% if order.is_pickup %}
