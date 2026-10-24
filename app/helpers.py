@@ -72,13 +72,14 @@ def get_cart_items():
             variant = ProductVariant.query.get(variant_id)
             if not variant or variant.product_id != product.id or not variant.is_active:
                 continue
-        unit_price = variant.effective_price if variant else product.price
-        unit_price = Decimal(str(unit_price))
+        base_price = Decimal(str(variant.effective_price if variant else product.price))
+        unit_price = Decimal(str(product.price_for(variant)))
         items.append({
             'product': product,
             'variant': variant,
             'quantity': quantity,
             'unit_price': unit_price,
+            'was_price': base_price if base_price > unit_price else None,
             'total': unit_price * quantity,
             'line_key': key,
         })

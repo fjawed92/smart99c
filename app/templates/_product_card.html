@@ -35,8 +35,8 @@
     {% endif %}
     <div class="product-row">
       <div class="product-pricing">
-        <span class="product-price">${{ "%.2f"|format(product.price) }}</span>
-        {% if product.is_on_sale %}<span class="product-compare-price">${{ "%.2f"|format(product.compare_price) }}</span>{% endif %}
+        <span class="product-price">${{ "%.2f"|format(product.current_price) }}</span>
+        {% if product.is_on_sale %}<span class="product-compare-price">${{ "%.2f"|format(product.was_price) }}</span>{% endif %}
       </div>
       {% if not product.in_stock %}
       <span class="oos">Sold out</span>

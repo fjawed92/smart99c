@@ -94,6 +94,31 @@ Set these in Render → Environment (then the site restarts):
 This uses IzyOps' `/api/v2/products` and `/api/v2/catalog/facets`, read-only.
 Costs are shown in the admin screen only, never to shoppers.
 
+## Discounts & delivery options
+
+Admin → **Discounts**:
+
+- **Cash pickup discount**: a % off for customers who choose "Pick up · Pay cash
+  in store". It's shown at checkout, on product pages and in the cart, and
+  optionally in the scrolling banner.
+- **Promo code + cash**: choose "Give both" (the code comes off first, then the
+  cash %) or "Only the bigger one".
+- **Sales**: % off the whole store or one category, with optional start and end
+  days. Prices on the site drop while a sale runs. If two sales cover the same
+  item, the bigger one wins.
+- **Promo codes**: % off, $ off or free delivery. Each code can have a minimum
+  order, start and end days, a total-use limit, and a once-per-customer limit
+  (checked by email).
+
+Admin → **Shipping**: add, edit, switch on/off and delete pickup or delivery
+options. "Only for orders over" is enforced at checkout. A $0 delivery option
+with that minimum is how "free delivery over $X" works, and the site banner
+uses that amount. The tax rate in Admin → Settings is the rate charged at
+checkout.
+
+All order math lives in `app/services/pricing.py`. In order: sale prices,
+promo code, cash discount, tax, delivery, then the card service fee.
+
 ## Visitor analytics
 
 Admin → **Visitors** shows who visits the store website: visitors per day,
@@ -114,8 +139,8 @@ that found nothing), and how many go from visit → cart → order. A short
 ## Store details
 
 Address, phone, restock day and pickup time live in `app/store.py`.
-Store hours and the free-delivery amount can also be changed in
-Admin → Settings.
+Store hours can also be changed in Admin → Settings, and the free-delivery
+amount in Admin → Shipping.
 
 ## Admin Access
 

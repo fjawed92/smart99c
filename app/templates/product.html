@@ -20,7 +20,8 @@
 {% set gallery = product.gallery_images %}
 {% set initial_image_url = (default_variant.image_url if default_variant else product.primary_image_url) %}
 {% set initial_stock = (default_variant.stock_quantity if default_variant else product.stock_quantity) %}
-{% set initial_price = (default_variant.effective_price if default_variant else product.price) %}
+{% set initial_price = (default_variant.sale_price if default_variant else product.current_price) %}
+{% set initial_was = (default_variant.effective_price if default_variant and product.sale_percent else product.was_price) %}
 {% set has_initial_stock = (initial_stock > 0) if product.track_inventory else true %}
 
 <div class="container">
@@ -74,10 +75,8 @@
 
       <div class="product-detail-pricing">
         <span class="price-main" id="displayPrice">${{ "%.2f"|format(initial_price) }}</span>
-        {% if product.is_on_sale and not default_variant %}
-        <span class="price-compare">${{ "%.2f"|format(product.compare_price) }}</span>
-        <span class="save-chip">SAVE {{ product.discount_percent }}%</span>
-        {% endif %}
+        <span class="price-compare {% if not initial_was %}d-none{% endif %}" id="displayWas">${{ "%.2f"|format(initial_was or 0) }}</span>
+        <span class="save-chip {% if not initial_was %}d-none{% endif %}" id="displaySave">SAVE {{ ((initial_was - initial_price) / initial_was * 100)|int if initial_was else 0 }}%</span>
       </div>
 
       <div class="stock-status mb-3" id="stockStatus">
@@ -107,7 +106,8 @@
                   aria-checked="{% if default_variant and v.id == default_variant.id %}true{% else %}false{% endif %}"
                   data-variant-id="{{ v.id }}"
                   data-stock="{{ v.stock_quantity }}"
-                  data-price="{{ "%.2f"|format(v.effective_price) }}"
+                  data-price="{{ "%.2f"|format(v.sale_price) }}"
+                  data-was="{{ "%.2f"|format(v.effective_price) if product.sale_percent else '' }}"
                   data-image="{{ v.image_url or product.primary_image_url or '' }}"
                   data-color-name="{{ v.color_name }}"
                   data-sku="{{ v.sku or '' }}"
@@ -143,7 +143,8 @@
 
       <div class="facts">
         <div><span>Pickup</span><span>Ready at {{ store.address_short }} in {{ store.pickup_time }} · Free</span></div>
-        <div><span>Delivery</span><span>Free local delivery on orders over ${{ store.free_delivery_over }}</span></div>
+        <div><span>Delivery</span><span>{% if store.free_delivery_over %}Free local delivery on orders over ${{ store.free_delivery_over }}{% else %}Local delivery available{% endif %}</span></div>
+        {% if cash_discount_pct %}<div><span>Pay cash</span><span class="text-success fw-700">Pay cash at pickup &amp; save {{ cash_discount_pct|pct }}</span></div>{% endif %}
         {% if product.weight %}<div><span>Weight</span><span>{{ product.weight }} lbs</span></div>{% endif %}
         {% if product.upc %}<div><span>UPC</span><span class="mono">{{ product.upc }}</span></div>{% endif %}
       </div>
@@ -250,6 +251,16 @@
     variantInput.value = vid;
     if (mainImg && img) mainImg.src = img;
     if (priceEl) priceEl.textContent = '$' + price.toFixed(2);
+    const was = parseFloat(swatch.dataset.was || '0');
+    const wasEl = document.getElementById('displayWas'), saveEl = document.getElementById('displaySave');
+    if (wasEl && saveEl) {
+      wasEl.classList.toggle('d-none', !(was > price));
+      saveEl.classList.toggle('d-none', !(was > price));
+      if (was > price) {
+        wasEl.textContent = '$' + was.toFixed(2);
+        saveEl.textContent = 'SAVE ' + Math.floor((was - price) / was * 100) + '%';
+      }
+    }
     if (mobileStickyPrice) mobileStickyPrice.textContent = '$' + price.toFixed(2);
     if (colorNameEl) colorNameEl.textContent = colorName;
     if (skuEl && sku) skuEl.textContent = sku;

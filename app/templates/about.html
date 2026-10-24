@@ -34,7 +34,7 @@
   <div class="info-grid">
     <div class="info-card"><div class="k"><i class="bi bi-shield-check"></i></div><h3>Always sealed</h3><p>Trading card product comes sealed from trusted distributors.</p></div>
     <div class="info-card"><div class="k"><i class="bi bi-shop"></i></div><h3>Pickup today</h3><p>Order online and your items are ready at the counter in {{ store.pickup_time }}.</p></div>
-    <div class="info-card"><div class="k"><i class="bi bi-truck"></i></div><h3>Local delivery</h3><p>Free local delivery on orders over ${{ store.free_delivery_over }}. Delivery options are shown at checkout.</p></div>
+    <div class="info-card"><div class="k"><i class="bi bi-truck"></i></div><h3>Local delivery</h3><p>{% if store.free_delivery_over %}Free local delivery on orders over ${{ store.free_delivery_over }}. {% endif %}Delivery options are shown at checkout.</p></div>
   </div>
 </div></section>
 {% endblock %}

@@ -35,16 +35,13 @@
                        step="0.001" min="0" max="20" placeholder="8.875" />
                 <span class="input-group-text">%</span>
               </div>
-              <small class="text-muted">NY state tax rate is 8.875%</small>
+              <small class="text-muted">This is the rate charged at checkout. Check your rate with the NYS Tax Department.</small>
             </div>
             <div class="col-md-6">
-              <label class="form-label">Free Shipping Threshold</label>
-              <div class="input-group">
-                <span class="input-group-text">$</span>
-                <input type="number" name="free_shipping_threshold" class="form-control"
-                       value="{{ settings.get('free_shipping_threshold', '50') }}"
-                       step="0.01" min="0" placeholder="50.00" />
-              </div>
+              <label class="form-label">Free delivery &amp; discounts</label>
+              <p class="small text-muted mb-0">The free-delivery amount is set on each option in
+                <a href="{{ url_for('admin.shipping') }}">Shipping</a> ("Only for orders over").
+                Sales, promo codes and the cash discount are in <a href="{{ url_for('admin.discounts') }}">Discounts</a>.</p>
             </div>
           </div>
         </div>
@@ -91,7 +88,7 @@
           <div class="form-check form-switch mb-3">
             <input class="form-check-input" type="checkbox" id="cash_pickup_active" name="cash_pickup_active" {% if settings.get('cash_pickup_active', '1') == '1' %}checked{% endif %}>
             <label class="form-check-label fw-700" for="cash_pickup_active">Let customers pay cash when they pick up</label>
-            <div class="small text-muted">Shows a "Pick up · Pay cash in store" option at checkout.</div>
+            <div class="small text-muted">Shows a "Pick up · Pay cash in store" option at checkout. Give a % off for paying cash in <a href="{{ url_for('admin.discounts') }}#cash">Discounts</a>.</div>
           </div>
           <div class="row g-3">
             <div class="col-md-6">

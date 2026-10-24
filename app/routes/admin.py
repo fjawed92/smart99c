@@ -266,14 +266,15 @@ def orders_export():
     ws.title = 'Orders'
 
     header = ['Order #', 'Date', 'Status', 'Customer', 'Email', 'Phone',
-              'Items', 'Pickup / Delivery', 'Subtotal', 'Tax', 'Shipping', 'Service Fee', 'Total', 'Payment Intent']
+              'Items', 'Pickup / Delivery', 'Subtotal', 'Promo Code', 'Promo Discount', 'Cash Discount',
+              'Tax', 'Shipping', 'Service Fee', 'Total', 'Payment Intent']
     for i, h in enumerate(header, start=1):
         c = ws.cell(row=1, column=i, value=h)
         c.font = Font(bold=True, color='FFFFFF')
         c.fill = PatternFill('solid', fgColor='E8334A')
         c.alignment = Alignment(horizontal='left', vertical='center')
 
-    widths = [14, 18, 12, 24, 28, 16, 50, 30, 10, 10, 11, 12, 10, 32]
+    widths = [14, 18, 12, 24, 28, 16, 50, 30, 10, 12, 12, 12, 10, 11, 12, 10, 32]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
 
@@ -293,6 +294,9 @@ def orders_export():
             items_str,
             o.fulfillment_label,
             float(o.subtotal or 0),
+            o.promo_code or '',
+            float(o.promo_discount or 0),
+            float(o.cash_discount or 0),
             float(o.tax or 0),
             float(o.shipping_cost or 0),
             float(o.service_fee or 0),
@@ -1082,8 +1086,8 @@ def toggle_user_active(user_id):
 
 class ShippingRateForm(FlaskForm):
     name = StringField('Name', [validators.DataRequired(), validators.Length(max=100)])
-    price = DecimalField('Price', [validators.DataRequired(), validators.NumberRange(min=0)], places=2)
-    min_order_amount = DecimalField('Free Shipping Threshold', [validators.Optional(), validators.NumberRange(min=0)], places=2, default=0)
+    price = DecimalField('Price', [validators.InputRequired(), validators.NumberRange(min=0)], places=2)
+    min_order_amount = DecimalField('Only for orders over', [validators.Optional(), validators.NumberRange(min=0)], places=2, default=0)
     estimated_days = StringField('Estimated Days', [validators.Optional(), validators.Length(max=50)])
     is_active = BooleanField('Active', default=True)
     sort_order = IntegerField('Sort Order', [validators.Optional()], default=0)
@@ -1093,8 +1097,24 @@ class ShippingRateForm(FlaskForm):
 @admin_required
 def shipping():
     rates = ShippingRate.query.order_by(ShippingRate.sort_order, ShippingRate.price).all()
-    form = ShippingRateForm()
-    return render_template('admin/shipping.html', rates=rates, form=form)
+    editing = ShippingRate.query.get(request.args.get('edit', type=int) or 0)
+    form = ShippingRateForm(obj=editing) if editing else ShippingRateForm()
+    return render_template('admin/shipping.html', rates=rates, form=form, editing=editing)
+
+
+def _fill_rate(rate, form):
+    rate.name = form.name.data.strip()
+    rate.price = form.price.data
+    rate.min_order_amount = form.min_order_amount.data or 0
+    rate.estimated_days = form.estimated_days.data
+    rate.is_active = form.is_active.data
+    rate.sort_order = form.sort_order.data or 0
+
+
+def _form_errors(form):
+    for field, errors in form.errors.items():
+        label = getattr(form, field).label.text if hasattr(form, field) else field
+        flash(f'{label}: {errors[0]}', 'error')
 
 
 @admin_bp.route('/shipping/new', methods=['POST'])
@@ -1102,17 +1122,37 @@ def shipping():
 def new_shipping_rate():
     form = ShippingRateForm()
     if form.validate_on_submit():
-        rate = ShippingRate(
-            name=form.name.data,
-            price=form.price.data,
-            min_order_amount=form.min_order_amount.data or 0,
-            estimated_days=form.estimated_days.data,
-            is_active=form.is_active.data,
-            sort_order=form.sort_order.data or 0,
-        )
+        rate = ShippingRate()
+        _fill_rate(rate, form)
         db.session.add(rate)
         db.session.commit()
         flash(f'Shipping rate "{rate.name}" added!', 'success')
+    else:
+        _form_errors(form)
+    return redirect(url_for('admin.shipping'))
+
+
+@admin_bp.route('/shipping/<int:rate_id>/edit', methods=['POST'])
+@admin_required
+def edit_shipping_rate(rate_id):
+    rate = ShippingRate.query.get_or_404(rate_id)
+    form = ShippingRateForm()
+    if form.validate_on_submit():
+        _fill_rate(rate, form)
+        db.session.commit()
+        flash(f'"{rate.name}" saved.', 'success')
+        return redirect(url_for('admin.shipping'))
+    _form_errors(form)
+    return redirect(url_for('admin.shipping', edit=rate.id))
+
+
+@admin_bp.route('/shipping/<int:rate_id>/toggle', methods=['POST'])
+@admin_required
+def toggle_shipping_rate(rate_id):
+    rate = ShippingRate.query.get_or_404(rate_id)
+    rate.is_active = not rate.is_active
+    db.session.commit()
+    flash(f'"{rate.name}" is now {"on" if rate.is_active else "off"}.', 'success')
     return redirect(url_for('admin.shipping'))
 
 
@@ -1126,6 +1166,197 @@ def delete_shipping_rate(rate_id):
     return redirect(url_for('admin.shipping'))
 
 
+# ─── Discounts ───────────────────────────────────────────────────────────────
+
+def _form_decimal(name, default=None):
+    raw = (request.form.get(name) or '').strip().replace('$', '').replace('%', '')
+    if not raw:
+        return default
+    try:
+        return Decimal(raw)
+    except Exception:
+        return None
+
+
+def _form_dates():
+    from app.services.pricing import day_start_utc, day_end_utc
+    starts = day_start_utc(request.form.get('starts_on'))
+    ends = day_end_utc(request.form.get('ends_on'))
+    if starts and ends and ends <= starts:
+        return starts, ends, 'The end date must be on or after the start date.'
+    return starts, ends, None
+
+
+@admin_bp.route('/discounts')
+@admin_required
+def discounts():
+    from app.models import Sale, PromoCode
+    from app.services import pricing
+    now = datetime.utcnow()
+    sales = Sale.query.order_by(Sale.created_at.desc()).all()
+    promos = PromoCode.query.order_by(PromoCode.created_at.desc()).all()
+    edit_sale = Sale.query.get(request.args.get('edit_sale', type=int) or 0)
+    edit_promo = PromoCode.query.get(request.args.get('edit_promo', type=int) or 0)
+    categories = Category.query.order_by(Category.name).all()
+    stats = db.session.query(db.func.count(Order.id),
+                             db.func.coalesce(db.func.sum(Order.promo_discount), 0),
+                             db.func.coalesce(db.func.sum(Order.cash_discount), 0))\
+        .filter(Order.status.notin_(('cancelled', 'refunded', 'no_show')),
+                db.or_(Order.promo_discount > 0, Order.cash_discount > 0)).first()
+    return render_template('admin/discounts.html', sales=sales, promos=promos,
+                           edit_sale=edit_sale, edit_promo=edit_promo, categories=categories,
+                           now=now, local_day=pricing.local_day,
+                           running_count=sum(1 for x in sales if x.is_running(now)),
+                           cash_percent=pricing.cash_discount_percent(),
+                           cash_pickup_on=get_site_setting('cash_pickup_active', '1') == '1',
+                           banner_on=get_site_setting('cash_discount_banner_active', '1') == '1',
+                           stacking=pricing.stacking(), stats=stats)
+
+
+@admin_bp.route('/discounts/settings', methods=['POST'])
+@admin_required
+def discount_settings():
+    pct = _form_decimal('cash_discount_percent', Decimal('0'))
+    if pct is None or pct < 0 or pct >= 100:
+        flash('Cash discount must be a number from 0 to 99.', 'error')
+        return redirect(url_for('admin.discounts'))
+    set_site_setting('cash_discount_percent', f'{pct.normalize():f}')
+    set_site_setting('cash_discount_banner_active',
+                     '1' if request.form.get('cash_discount_banner_active') == 'on' else '')
+    set_site_setting('discount_stacking',
+                     'best' if request.form.get('discount_stacking') == 'best' else 'stack')
+    db.session.commit()
+    flash('Discount settings saved.', 'success')
+    return redirect(url_for('admin.discounts'))
+
+
+@admin_bp.route('/discounts/sales', methods=['POST'])
+@admin_bp.route('/discounts/sales/<int:sale_id>', methods=['POST'])
+@admin_required
+def save_sale(sale_id=None):
+    from app.models import Sale
+    sale = Sale.query.get_or_404(sale_id) if sale_id else Sale()
+    back = url_for('admin.discounts', edit_sale=sale_id) if sale_id else url_for('admin.discounts')
+    name = (request.form.get('name') or '').strip()[:100]
+    pct = _form_decimal('percent')
+    starts, ends, date_error = _form_dates()
+    if not name:
+        flash('Give the sale a name, e.g. "Eid sale".', 'error')
+        return redirect(back + '#sales')
+    if pct is None or pct <= 0 or pct >= 100:
+        flash('Sale % must be between 1 and 99.', 'error')
+        return redirect(back + '#sales')
+    if date_error:
+        flash(date_error, 'error')
+        return redirect(back + '#sales')
+    category_id = request.form.get('category_id', type=int) or None
+    sale.name, sale.percent, sale.category_id = name, pct, category_id
+    sale.starts_at, sale.ends_at = starts, ends
+    sale.is_active = request.form.get('is_active') == 'on'
+    sale.show_banner = request.form.get('show_banner') == 'on'
+    if not sale_id:
+        db.session.add(sale)
+    db.session.commit()
+    flash(f'Sale "{sale.name}" saved.', 'success')
+    return redirect(url_for('admin.discounts') + '#sales')
+
+
+@admin_bp.route('/discounts/sales/<int:sale_id>/toggle', methods=['POST'])
+@admin_required
+def toggle_sale(sale_id):
+    from app.models import Sale
+    sale = Sale.query.get_or_404(sale_id)
+    sale.is_active = not sale.is_active
+    db.session.commit()
+    flash(f'Sale "{sale.name}" is now {"on" if sale.is_active else "off"}.', 'success')
+    return redirect(url_for('admin.discounts') + '#sales')
+
+
+@admin_bp.route('/discounts/sales/<int:sale_id>/delete', methods=['POST'])
+@admin_required
+def delete_sale(sale_id):
+    from app.models import Sale
+    sale = Sale.query.get_or_404(sale_id)
+    db.session.delete(sale)
+    db.session.commit()
+    flash('Sale deleted.', 'success')
+    return redirect(url_for('admin.discounts') + '#sales')
+
+
+@admin_bp.route('/discounts/promos', methods=['POST'])
+@admin_bp.route('/discounts/promos/<int:promo_id>', methods=['POST'])
+@admin_required
+def save_promo(promo_id=None):
+    from app.models import PromoCode
+    from app.services.pricing import normalize_code
+    promo = PromoCode.query.get_or_404(promo_id) if promo_id else PromoCode()
+    back = (url_for('admin.discounts', edit_promo=promo_id) if promo_id else url_for('admin.discounts')) + '#promos'
+    code = normalize_code(request.form.get('code'))
+    kind = request.form.get('kind')
+    value = _form_decimal('value', Decimal('0'))
+    min_order = _form_decimal('min_order', Decimal('0'))
+    max_uses = request.form.get('max_uses', type=int)
+    starts, ends, date_error = _form_dates()
+    if not code or not code.replace('-', '').replace('_', '').isalnum():
+        flash('Codes can use letters, numbers, - and _ (e.g. EID10).', 'error')
+        return redirect(back)
+    clash = PromoCode.query.filter_by(code=code).first()
+    if clash and clash.id != promo.id:
+        flash(f'There is already a code called {code}.', 'error')
+        return redirect(back)
+    if kind not in PromoCode.KINDS:
+        flash('Choose what the code gives.', 'error')
+        return redirect(back)
+    if kind == 'percent' and (value is None or value <= 0 or value > 100):
+        flash('% off must be between 1 and 100.', 'error')
+        return redirect(back)
+    if kind == 'amount' and (value is None or value <= 0):
+        flash('$ off must be more than $0.', 'error')
+        return redirect(back)
+    if min_order is None or min_order < 0:
+        flash('Minimum order must be $0 or more.', 'error')
+        return redirect(back)
+    if max_uses is not None and max_uses < 1:
+        max_uses = None
+    if date_error:
+        flash(date_error, 'error')
+        return redirect(back)
+    promo.code, promo.kind = code, kind
+    promo.value = value if kind != 'free_shipping' else Decimal('0')
+    promo.min_order, promo.max_uses = min_order, max_uses
+    promo.starts_at, promo.ends_at = starts, ends
+    promo.once_per_customer = request.form.get('once_per_customer') == 'on'
+    promo.is_active = request.form.get('is_active') == 'on'
+    if not promo_id:
+        promo.uses = 0
+        db.session.add(promo)
+    db.session.commit()
+    flash(f'Promo code {promo.code} saved.', 'success')
+    return redirect(url_for('admin.discounts') + '#promos')
+
+
+@admin_bp.route('/discounts/promos/<int:promo_id>/toggle', methods=['POST'])
+@admin_required
+def toggle_promo(promo_id):
+    from app.models import PromoCode
+    promo = PromoCode.query.get_or_404(promo_id)
+    promo.is_active = not promo.is_active
+    db.session.commit()
+    flash(f'{promo.code} is now {"on" if promo.is_active else "off"}.', 'success')
+    return redirect(url_for('admin.discounts') + '#promos')
+
+
+@admin_bp.route('/discounts/promos/<int:promo_id>/delete', methods=['POST'])
+@admin_required
+def delete_promo(promo_id):
+    from app.models import PromoCode
+    promo = PromoCode.query.get_or_404(promo_id)
+    db.session.delete(promo)
+    db.session.commit()
+    flash(f'{promo.code} deleted. Past orders keep the code on them.', 'success')
+    return redirect(url_for('admin.discounts') + '#promos')
+
+
 # ─── Settings ────────────────────────────────────────────────────────────────
 
 @admin_bp.route('/settings', methods=['GET', 'POST'])
@@ -1136,7 +1367,6 @@ def settings():
             'announcement',
             'store_hours',
             'tax_rate',
-            'free_shipping_threshold',
             'service_fee_active',
             'service_fee_percent',
             'service_fee_fixed',

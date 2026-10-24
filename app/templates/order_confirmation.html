@@ -81,6 +81,18 @@
                 <span class="text-muted">Subtotal</span>
                 <span>${{ "%.2f"|format(order.subtotal) }}</span>
               </div>
+              {% if order.promo_discount and order.promo_discount > 0 %}
+              <div class="d-flex justify-content-between mb-2 text-success">
+                <span>Promo {{ order.promo_code }}</span>
+                <span>−${{ "%.2f"|format(order.promo_discount) }}</span>
+              </div>
+              {% endif %}
+              {% if order.cash_discount and order.cash_discount > 0 %}
+              <div class="d-flex justify-content-between mb-2 text-success">
+                <span>Cash discount</span>
+                <span>−${{ "%.2f"|format(order.cash_discount) }}</span>
+              </div>
+              {% endif %}
               <div class="d-flex justify-content-between mb-2">
                 <span class="text-muted">Shipping</span>
                 <span>{% if order.shipping_cost == 0 %}FREE{% else %}${{ "%.2f"|format(order.shipping_cost) }}{% endif %}</span>

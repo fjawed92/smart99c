@@ -92,3 +92,21 @@ body { background: var(--paper); }
   .admin-content { margin-left: 0; }
   .admin-body { padding: 1rem; }
 }
+
+/* Phone fixes (audit, Oct 2026) */
+.sidebar-backdrop { display: none; }
+.discount-jump { display: flex; gap: 8px; flex-wrap: wrap; }
+.tap-badge { cursor: pointer; }
+@media (max-width: 767.98px) {
+  .sidebar-backdrop.show { display: block; position: fixed; inset: 0; background: rgba(0, 0, 0, .35); z-index: 999; }
+  .sidebar-toggle { width: 44px; height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1.4rem; }
+  .sidebar-link { padding: .75rem .75rem; }
+  .admin-topbar { padding: .6rem 1rem; }
+  .admin-title { font-size: clamp(26px, 7.5vw, 36px); line-height: 1; }
+  .topbar-profile { width: 44px; height: 44px; padding: 0 !important; }
+  .mobile-collapse { display: none; }
+  .mobile-collapse.open { display: block; }
+  .admin-body .btn-sm { min-height: 40px; }
+  .bulk-action-bar .btn { flex: 1 1 auto; }
+  .admin-body .card-header { padding-inline: 1rem; }
+}

@@ -43,6 +43,9 @@ EXTRA_COLUMNS = [
     ('orders', 'ready_at', 'TIMESTAMP'),
     ('orders', 'picked_up_at', 'TIMESTAMP'),
     ('orders', 'reminder_sent_at', 'TIMESTAMP'),
+    ('orders', 'promo_code', 'VARCHAR(40)'),
+    ('orders', 'promo_discount', 'NUMERIC(10, 2) NOT NULL DEFAULT 0'),
+    ('orders', 'cash_discount', 'NUMERIC(10, 2) NOT NULL DEFAULT 0'),
 ]
 
 
