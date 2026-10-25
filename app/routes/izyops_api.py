@@ -545,9 +545,13 @@ def list_orders():
     """Orders changed since ``?since=``, oldest change first. A card order
     still waiting for its payment isn't an order yet and is left out.
     ``?scope=stock`` keeps only orders whose stock is still taken."""
+    from app.services.izyops_skus import ensure_skus
+
     scope = (request.args.get('scope') or 'stock').strip().lower()
     if scope not in ('stock', 'all'):
         return _err("'scope' must be 'stock' or 'all'")
+    # Lines name their product by item number, so every product needs one.
+    ensure_skus()
     q = Order.query.filter(Order.status != 'pending')
     if scope == 'stock':
         q = q.filter(Order.status.notin_(_RESTOCKED))
