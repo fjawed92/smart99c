@@ -115,8 +115,22 @@ and the registers' 🛒 Website Orders button. The site offers the same
 3. Optional, for instant order updates: in that card press Create website key
    and copy the two lines it shows into Render → Environment:
    `IZYOPS_NOTIFY_URL` and `IZYOPS_NOTIFY_KEY`.
-4. Once the import looks right, set `IZYOPS_OWNS_CATALOG=1`. The admin's
-   product pages become view-only; change products in IZY Ops from then on.
+4. Choose who manages the products in IZY Ops → Settings → Websites →
+   Catalog: **IZY Ops only** (the admin's product pages here become
+   view-only), **Website only** (IZY Ops sends stock only), or **Both** (edit
+   in either place; the latest change wins, and a price changed here becomes
+   the product's website price in IZY Ops). Change it any time.
+   `IZYOPS_OWNS_CATALOG=1` on Render forces "IZY Ops only" whatever IZY Ops says.
+
+**Nothing on the website is lost.** Before connecting, download everything
+from Admin → Products → **Download all products (backup)**: every product,
+colour, barcode and photo link, in a file you can upload again under Bulk
+Import to put it all back. The site also keeps its own copies under
+Admin → Products → **Backups**:
+- a copy of every product the first time IZY Ops connects (kept for good);
+- a copy of a product before each IZY Ops change (kept 180 days), each with
+  a Restore button.
+Photos IZY Ops replaces are never deleted from Cloudinary.
 
 Every product and colour gets a permanent item number (`SC99-00042`,
 `SC99-00042-V7`) the first time IZY Ops reads the catalog; numbers already set

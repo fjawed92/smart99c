@@ -1,0 +1,82 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}Product backups{% endblock %}
+{% block page_title %}Product backups{% endblock %}
+
+{% block content %}
+<p class="text-muted" style="max-width: 70ch">
+  Before IZY Ops changes a product on this website, the product is copied here: its name, prices, descriptions,
+  category, photos and colours. Restore puts a copy back. Stock isn't part of a restore — it always comes from IZY Ops.
+</p>
+
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body d-flex flex-wrap gap-3 align-items-center justify-content-between">
+    <div>
+      <strong><i class="bi bi-archive me-1"></i>Copy of every product before IZY Ops connected</strong><br>
+      {% if first %}
+        <span class="text-muted small">Made {{ first.taken_at|local_time }} · {{ first_count }} product{{ 's' if first_count != 1 }} · kept for good</span>
+      {% else %}
+        <span class="text-muted small">Made automatically the first time IZY Ops connects. Not made yet.</span>
+      {% endif %}
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      {% if first %}
+      <a class="btn btn-outline-primary" href="{{ url_for('admin.download_product_backups') }}">
+        <i class="bi bi-download me-1"></i>Download (Excel)</a>
+      {% endif %}
+      <a class="btn btn-outline-secondary" href="{{ url_for('admin.products_export') }}">
+        <i class="bi bi-download me-1"></i>Download today's products</a>
+    </div>
+  </div>
+</div>
+
+{% if locked %}
+<div class="alert alert-info"><i class="bi bi-lock me-1"></i>
+  IZY Ops manages products right now, so Restore is off — IZY Ops would undo it. Make the change in IZY Ops, or choose
+  "Both" or "Website only" there (Settings → Websites → Catalog). The downloads still work.</div>
+{% endif %}
+
+<form method="GET" class="d-flex gap-2 mb-3" style="max-width: 420px">
+  <input type="text" name="q" class="form-control" placeholder="Search by name or item #" value="{{ search }}" aria-label="Search backups">
+  <button class="btn btn-outline-secondary" type="submit">Search</button>
+</form>
+
+{% if backups %}
+<div class="table-responsive">
+<table class="table align-middle">
+  <thead><tr><th>Saved</th><th>Product</th><th>Price then</th><th>Why</th><th></th></tr></thead>
+  <tbody>
+  {% for b in backups %}
+  {% set d = data_of(b) %}
+  <tr>
+    <td class="text-nowrap small">{{ b.taken_at|local_time }}</td>
+    <td>
+      <div class="d-flex align-items-center gap-2">
+        {% if d.images %}<img src="{{ d.images[0] }}" alt="" width="40" height="40" style="object-fit:cover;border-radius:6px">{% endif %}
+        <div><strong>{{ d.name or b.name }}</strong><br><span class="text-muted small">{{ b.sku or '' }}{% if d.variants %} · {{ d.variants|length }} colour{{ 's' if d.variants|length != 1 }}{% endif %}</span></div>
+      </div>
+    </td>
+    <td class="text-nowrap">{% if d.price %}${{ '%.2f'|format(d.price|float) }}{% endif %}</td>
+    <td class="small">{{ b.reason }}</td>
+    <td class="text-end text-nowrap">
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin.download_product_backups', id=b.id) }}" title="Download this copy">
+        <i class="bi bi-download"></i></a>
+      <form method="POST" action="{{ url_for('admin.restore_product_backup', backup_id=b.id) }}" class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-sm btn-outline-primary" {% if locked %}disabled{% endif %}>Restore</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% if pagination.pages > 1 %}
+<nav class="d-flex gap-2">
+  {% if pagination.has_prev %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin.product_backups', page=pagination.prev_num, q=search) }}">Newer</a>{% endif %}
+  {% if pagination.has_next %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin.product_backups', page=pagination.next_num, q=search) }}">Older</a>{% endif %}
+</nav>
+{% endif %}
+{% else %}
+<div class="card border-0 shadow-sm p-4 text-center text-muted">No backups yet. One is saved each time IZY Ops changes a product.</div>
+{% endif %}
+{% endblock %}

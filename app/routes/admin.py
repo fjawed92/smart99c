@@ -17,6 +17,7 @@ from app.helpers import (generate_slug, get_site_setting, set_site_setting,
                          encrypt_secret)
 from app.timezones import (local_today, day_start_utc, day_end_utc, parse_day,
                            format_local, tz_label, zone_choices, valid_zone, forget_tz)
+from app.services import izyops_mode
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -30,8 +31,8 @@ def admin_required(f):
     return login_required(decorated)
 
 
-# Pages that change product details. With IZYOPS_OWNS_CATALOG on, saving any
-# of them is refused (app/__init__.py): IZY Ops is where products are edited.
+# Pages that change product details. When IZY Ops manages the products
+# (app/services/izyops_mode.py), saving any of them is refused (app/__init__.py).
 CATALOG_ENDPOINTS = {
     'admin.new_product', 'admin.edit_product', 'admin.delete_product', 'admin.toggle_product',
     'admin.bulk_product_action', 'admin.delete_product_image', 'admin.create_variant',
@@ -124,7 +125,8 @@ def products():
                            search=search,
                            category_id=category_id,
                            status=status,
-                           catalog_locked=current_app.config.get('IZYOPS_OWNS_CATALOG'))
+                           catalog_mode=izyops_mode.catalog_mode(),
+                           izyops_connected=bool(get_site_setting(izyops_mode.SETTING_KEY, '')))
 
 
 @admin_bp.route('/products/new', methods=['GET', 'POST'])
@@ -501,6 +503,65 @@ def products_export():
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                      as_attachment=True,
                      download_name=f'smart99c-products-{stamp}.xlsx')
+
+
+@admin_bp.route('/products/backups', methods=['GET'])
+@admin_required
+def product_backups():
+    """Copies of products saved before IZY Ops changed them, and the full
+    copy made the first time IZY Ops connected."""
+    from app.models import ProductBackup
+    from app.services.backups import FIRST_BATCH, data_of
+
+    search = (request.args.get('q') or '').strip()
+    page = request.args.get('page', 1, type=int)
+    q = ProductBackup.query.filter(ProductBackup.product_id.isnot(None))
+    if search:
+        like = f'%{search}%'
+        q = q.filter(db.or_(ProductBackup.name.ilike(like), ProductBackup.sku.ilike(like)))
+    pagination = q.order_by(ProductBackup.taken_at.desc(), ProductBackup.id.desc()).paginate(page=page, per_page=30)
+    first = ProductBackup.query.filter_by(batch=FIRST_BATCH).order_by(ProductBackup.taken_at).first()
+    first_count = ProductBackup.query.filter(ProductBackup.batch == FIRST_BATCH,
+                                             ProductBackup.product_id.isnot(None)).count()
+    return render_template('admin/product_backups.html', pagination=pagination, backups=pagination.items,
+                           search=search, first=first, first_count=first_count, data_of=data_of,
+                           locked=izyops_mode.locked())
+
+
+@admin_bp.route('/products/backups/<int:backup_id>/restore', methods=['POST'])
+@admin_required
+def restore_product_backup(backup_id):
+    from app.models import ProductBackup
+    from app.services import backups
+
+    backup = ProductBackup.query.get_or_404(backup_id)
+    if izyops_mode.locked():
+        flash('IZY Ops manages products right now, so it would undo a restore here. Make the change in IZY Ops, '
+              'or choose "Both" or "Website only" in IZY Ops → Settings → Websites → Catalog first.', 'warning')
+        return redirect(url_for('admin.product_backups'))
+    product = backups.restore(backup)
+    if product is None:
+        flash('That product no longer exists. Download the backup and add it back under Bulk Import.', 'error')
+    else:
+        flash(f'"{product.name}" is back the way it was on {backup.taken_at:%b %d, %Y %H:%M} UTC. '
+              'Its values from just before the restore were saved as a backup too.', 'success')
+    return redirect(url_for('admin.product_backups'))
+
+
+@admin_bp.route('/products/backups/download', methods=['GET'])
+@admin_required
+def download_product_backups():
+    """Excel of the first full backup (?which=first, default) or of one backup."""
+    from app.models import ProductBackup
+    from app.services.backups import first_backup_rows
+    from app.services.product_export import build_backup_workbook, workbook_to_bytes
+
+    backup_id = request.args.get('id', type=int)
+    rows = [ProductBackup.query.get_or_404(backup_id)] if backup_id else first_backup_rows()
+    buf = workbook_to_bytes(build_backup_workbook(rows))
+    name = f'smart99c-backup-{backup_id}.xlsx' if backup_id else 'smart99c-products-before-izyops.xlsx'
+    return send_file(buf, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                     as_attachment=True, download_name=name)
 
 
 @admin_bp.route('/products/import', methods=['POST'])

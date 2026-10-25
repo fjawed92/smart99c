@@ -24,7 +24,6 @@ own SKU, so stock is kept per colour.
 """
 from __future__ import annotations
 
-import hashlib
 import hmac
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
@@ -34,7 +33,8 @@ import stripe
 from flask import Blueprint, current_app, jsonify, request
 
 from app.extensions import db
-from app.models import Category, Order, Product, ProductImage, ProductVariant
+from app.models import Category, Order, Product, ProductVariant
+from app.services.product_images import own_image_urls, set_product_images
 
 izyops_api_bp = Blueprint('izyops_api', __name__, url_prefix='/api/izyops')
 
@@ -136,15 +136,8 @@ def _paged(query, order_by, key, serialize, default=200):
 
 # ─── Products ────────────────────────────────────────────────────────────────
 
-def _images(product):
-    gallery = product.gallery_images
-    primary = product.primary_image
-    ordered = ([primary] if primary in gallery else []) + [img for img in gallery if img is not primary]
-    return [img.image_url for img in ordered if img.image_url]
-
-
 def _product_row(product, variant=None):
-    images = _images(product)
+    images = own_image_urls(product)
     if variant is not None and variant.images:
         images = [variant.images[0].image_url] + [u for u in images if u != variant.images[0].image_url]
     name = product.name if variant is None else f'{product.name} — {variant.color_name}'
@@ -190,6 +183,26 @@ def _product_row(product, variant=None):
 @izyops_api_bp.route('/health', methods=['GET'])
 def health():
     return _ok({'ok': True, 'server_time': _iso(_now())})
+
+
+@izyops_api_bp.route('/settings', methods=['POST'])
+@require_izyops_auth
+def save_settings():
+    """``{"catalog_managed_by": "izyops"|"website"|"both"}`` — who manages
+    this website's products (IZY Ops → Settings → Websites → Catalog). The
+    first time IZY Ops connects, every product is backed up first."""
+    from app.helpers import set_site_setting
+    from app.services import backups, izyops_mode
+
+    body = request.get_json(silent=True) or {}
+    mode = body.get('catalog_managed_by')
+    if mode not in izyops_mode.MODES:
+        return _err(f"'catalog_managed_by' must be one of {list(izyops_mode.MODES)}")
+    backups.full_backup_once()
+    set_site_setting(izyops_mode.SETTING_KEY, mode)
+    db.session.commit()
+    return _ok({'catalog_managed_by': izyops_mode.catalog_mode(),
+                'forced_by_server': bool(current_app.config.get('IZYOPS_OWNS_CATALOG'))})
 
 
 @izyops_api_bp.route('/products', methods=['GET'])
@@ -294,40 +307,14 @@ def _parse_text(body, key, max_len, nullable=True):
     return value or None
 
 
-def _image_url(url):
-    """Copy a picture IZY Ops sent into Cloudinary once (named after the
-    link, so the same picture is never uploaded twice); without Cloudinary
-    the site links to it directly."""
-    key = 'izy_' + hashlib.sha1(url.encode()).hexdigest()[:24]
-    known = ProductImage.query.filter(db.or_(ProductImage.cloudinary_public_id.like(f'%{key}'),
-                                             ProductImage.image_url == url)).first()
-    if known is not None:
-        return known.image_url, known.cloudinary_public_id
-    if current_app.config.get('CLOUDINARY_CLOUD_NAME'):
-        try:
-            import cloudinary.uploader
-            up = cloudinary.uploader.upload(url, folder='smart99c/products', public_id=key,
-                                            overwrite=True, resource_type='image')
-            return up.get('secure_url') or url, up.get('public_id')
-        except Exception:  # noqa: BLE001 — link to the original instead
-            current_app.logger.warning('Cloudinary upload failed for %s; linking instead', url)
-    return url, None
-
-
-def _set_images(product, urls):
-    """Make the product's own photos (not a colour's) these, in this order."""
-    current = [img for img in product.images if img.variant_id is None]
-    if [img.image_url for img in current] == urls:
-        return False
-    stored = [_image_url(url) for url in urls]
-    if [img.image_url for img in current] == [u for u, _ in stored]:
-        return False
-    for img in current:
-        product.images.remove(img)
-    for idx, (url, public_id) in enumerate(stored):
-        product.images.append(ProductImage(image_url=url, cloudinary_public_id=public_id,
-                                           is_primary=idx == 0, sort_order=idx))
-    return True
+def _drop(backup):
+    """Nothing changed after all: no backup needed."""
+    if backup is None:
+        return
+    if backup in db.session.new:
+        db.session.expunge(backup)
+    else:
+        db.session.delete(backup)
 
 
 def _category(name):
@@ -360,11 +347,14 @@ def upsert_product(sku):
         fields = {}
         if 'name' in body:
             fields['name'] = _parse_text(body, 'name', 255, nullable=False)
-        for key in ('short_description',):
-            if key in body:
-                fields[key] = (_parse_text(body, key, None) or '')[:500] or None
-        if 'description' in body:
-            fields['description'] = _parse_text(body, 'description', None)
+        # An empty description from IZY Ops means "IZY Ops has none", not
+        # "erase the website's": text is only ever replaced, never blanked.
+        short = _parse_text(body, 'short_description', None) if 'short_description' in body else None
+        if short:
+            fields['short_description'] = short[:500]
+        description = _parse_text(body, 'description', None) if 'description' in body else None
+        if description:
+            fields['description'] = description
         if 'barcode' in body:
             fields['upc'] = _parse_text(body, 'barcode', 120)
         if 'price' in body:
@@ -386,8 +376,17 @@ def upsert_product(sku):
     except _EditError as exc:
         return _err(str(exc))
 
+    from app.services import backups, izyops_mode
+
+    if izyops_mode.catalog_mode() == 'website':
+        return _err('managed_on_website', 409,
+                    message='Products on this website are managed on the website (IZY Ops → Websites → Catalog)')
+    # The first time IZY Ops changes anything, every product is saved first.
+    backups.full_backup_once()
+
     variant = ProductVariant.query.filter_by(sku=sku).first()
     if variant is not None:
+        backup = backups.before_izyops_change(variant.product)
         updated = []
         if 'price' in fields:
             override = None if fields['price'] == variant.product.price else fields['price']
@@ -397,6 +396,8 @@ def upsert_product(sku):
         if 'is_active' in fields and variant.is_active != fields['is_active']:
             variant.is_active = fields['is_active']
             updated.append('is_active')
+        if not updated:
+            _drop(backup)
         db.session.commit()
         return _ok({'product_id': None, 'sku': sku, 'created': False, 'updated_fields': updated,
                     'image_errors': []})
@@ -422,6 +423,7 @@ def upsert_product(sku):
                           sku=sku, price=fields['price'], stock_quantity=0, track_inventory=True)
         db.session.add(product)
     updated = []
+    backup = None if created else backups.before_izyops_change(product)
     if not created and product.sku != sku:
         product.sku = sku
         updated.append('sku')
@@ -434,10 +436,12 @@ def upsert_product(sku):
         if product.category_id != cat.id:
             product.category = cat
             updated.append('category')
-    if urls is not None and _set_images(product, urls):
+    if urls is not None and set_product_images(product, urls):
         updated.append('images')
     if created or updated:
         product.updated_at = datetime.utcnow()
+    if not updated:
+        _drop(backup)
     db.session.commit()
     return _ok({'product_id': product.id, 'sku': product.sku, 'created': created, 'updated_fields': updated,
                 'image_errors': []})

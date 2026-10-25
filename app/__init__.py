@@ -61,16 +61,17 @@ def create_app(config_name='default'):
     from app.services import izyops_notify
     izyops_notify.install()
 
-    # IZYOPS_OWNS_CATALOG: product details are edited in IZY Ops only, so the
-    # admin's product forms stop saving (orders, stock counts from IZY Ops and
-    # everything else keep working).
+    # When IZY Ops manages the products (IZY Ops → Websites → Catalog, or
+    # IZYOPS_OWNS_CATALOG=1), the admin's product forms stop saving; orders,
+    # stock counts from IZY Ops and everything else keep working.
     from app.routes.admin import CATALOG_ENDPOINTS
+    from app.services import izyops_mode, product_touch
+    product_touch.install()
 
     @app.before_request
     def catalog_lock():
         from flask import flash, redirect, request as req, url_for
-        if (app.config.get('IZYOPS_OWNS_CATALOG') and req.method == 'POST'
-                and req.endpoint in CATALOG_ENDPOINTS):
+        if req.method == 'POST' and req.endpoint in CATALOG_ENDPOINTS and izyops_mode.locked():
             flash('Products are managed in IZY Ops — change them there and this site follows within a minute.',
                   'warning')
             return redirect(url_for('admin.products'))
