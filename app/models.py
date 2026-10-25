@@ -275,6 +275,11 @@ class Order(db.Model):
     pickup_deadline = db.Column(db.DateTime)   # cash pickups only (UTC)
     ready_at = db.Column(db.DateTime)
     picked_up_at = db.Column(db.DateTime)
+    shipped_at = db.Column(db.DateTime)
+    delivered_at = db.Column(db.DateTime)
+    cancelled_at = db.Column(db.DateTime)
+    no_show_at = db.Column(db.DateTime)
+    refunded_at = db.Column(db.DateTime)
     reminder_sent_at = db.Column(db.DateTime)
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -292,6 +297,42 @@ class Order(db.Model):
             # Older orders: a paid delivery fee means it was delivery.
             return False if self.shipping_cost and self.shipping_cost > 0 else None
         return is_pickup_option(self.shipping_method)
+
+    # Which column records the time an order reached each status.
+    STATUS_TIMES = {'ready': 'ready_at', 'picked_up': 'picked_up_at', 'shipped': 'shipped_at',
+                    'delivered': 'delivered_at', 'cancelled': 'cancelled_at',
+                    'no_show': 'no_show_at', 'refunded': 'refunded_at'}
+
+    def set_status(self, status, now=None):
+        """Change the status and record when it happened (first time only)."""
+        self.status = status
+        column = self.STATUS_TIMES.get(status)
+        if column and getattr(self, column) is None:
+            setattr(self, column, now or datetime.utcnow())
+
+    @property
+    def timeline(self):
+        """[(label, time or None, tone)] for the order history, oldest first.
+
+        Older orders may have a status without a saved time; those steps are
+        listed last with no time rather than a made-up one.
+        """
+        placed = 'Reserved online (cash at pickup)' if self.is_cash else 'Ordered online'
+        steps = [(placed, self.created_at, 'primary')]
+        labels = [('ready_at', 'Packed · ready for pickup', 'primary'),
+                  ('reminder_sent_at', 'Pickup reminder emailed', 'muted'),
+                  ('picked_up_at', 'Picked up' + (' · cash paid' if self.is_cash else ''), 'success'),
+                  ('shipped_at', 'Shipped / out for delivery', 'primary'),
+                  ('delivered_at', 'Delivered', 'success'),
+                  ('no_show_at', 'No-show · items put back in stock', 'danger'),
+                  ('cancelled_at', 'Cancelled · items put back in stock', 'danger'),
+                  ('refunded_at', 'Refunded', 'danger')]
+        steps += [(label, getattr(self, col), tone) for col, label, tone in labels if getattr(self, col)]
+        steps.sort(key=lambda s: s[1])
+        column = self.STATUS_TIMES.get(self.status)
+        if column and getattr(self, column) is None:
+            steps.append((self.status_label, None, 'muted'))
+        return steps
 
     @property
     def is_cash(self):

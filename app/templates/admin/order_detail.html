@@ -115,12 +115,13 @@
     <div class="card border-0 shadow-sm mb-4">
       <div class="card-header bg-white border-0 pt-3"><h6 class="fw-700 mb-0">History</h6></div>
       <div class="card-body">
-        <ul class="list-unstyled small mb-3">
-          <li class="d-flex justify-content-between py-1"><span><i class="bi bi-circle-fill text-primary me-2" style="font-size:8px"></i>{% if order.is_cash %}Reserved online (cash at pickup){% else %}Ordered and paid online{% endif %}</span><span class="text-muted">{{ order.created_at|local_time('%a %-I:%M %p') }}</span></li>
-          {% if order.ready_at %}<li class="d-flex justify-content-between py-1"><span><i class="bi bi-circle-fill text-primary me-2" style="font-size:8px"></i>Marked ready · customer emailed</span><span class="text-muted">{{ order.ready_at|local_time('%a %-I:%M %p') }}</span></li>{% endif %}
-          {% if order.reminder_sent_at %}<li class="d-flex justify-content-between py-1"><span><i class="bi bi-circle-fill text-primary me-2" style="font-size:8px"></i>Reminder email</span><span class="text-muted">{{ order.reminder_sent_at|local_time('%a %-I:%M %p') }}</span></li>{% endif %}
-          {% if order.picked_up_at %}<li class="d-flex justify-content-between py-1"><span><i class="bi bi-circle-fill text-success me-2" style="font-size:8px"></i>Picked up{% if order.is_cash %} · cash paid{% endif %}</span><span class="text-muted">{{ order.picked_up_at|local_time('%a %-I:%M %p') }}</span></li>{% endif %}
-          {% if order.status in ('no_show', 'cancelled') %}<li class="py-1"><i class="bi bi-circle-fill text-danger me-2" style="font-size:8px"></i>{{ order.status_label }} · items put back in stock</li>{% endif %}
+        <ul class="list-unstyled small mb-3 order-timeline">
+          {% for label, when, tone in order.timeline %}
+          <li class="d-flex justify-content-between gap-3 py-1">
+            <span><i class="bi bi-circle-fill text-{{ 'secondary' if tone == 'muted' else tone }} me-2" style="font-size:8px"></i>{{ label }}</span>
+            <span class="text-muted text-end">{{ when|local_time('%a, %b %-d · %-I:%M %p') if when else 'time not recorded' }}</span>
+          </li>
+          {% endfor %}
         </ul>
         <form method="POST" action="{{ url_for('admin.order_pickup_action', order_id=order.id) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />

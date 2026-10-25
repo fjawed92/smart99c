@@ -45,7 +45,7 @@
       <div class="card border-0 shadow-sm mb-4">
         <div class="card-body">
           <h5 class="fw-700 mb-1">Welcome back, {{ current_user.first_name }}!</h5>
-          <p class="text-muted mb-0">Member since {{ current_user.created_at.strftime('%B %Y') }}</p>
+          <p class="text-muted mb-0">Member since {{ current_user.created_at|local_time('%B %Y') }}</p>
         </div>
       </div>
 
@@ -61,7 +61,7 @@
               {% for order in orders %}
               <tr>
                 <td class="fw-600">{{ order.order_number }}</td>
-                <td class="text-muted">{{ order.created_at.strftime('%b %d, %Y') }}</td>
+                <td class="text-muted">{{ order.created_at|local_time('%b %d, %Y') }}</td>
                 <td class="fw-600">${{ "%.2f"|format(order.total) }}</td>
                 <td><span class="badge status-{{ order.status }}">{{ order.status_label }}</span></td>
                 <td><a href="{{ url_for('orders.order_detail', order_number=order.order_number) }}" class="btn btn-sm btn-outline-primary">View</a></td>

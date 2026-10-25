@@ -382,7 +382,7 @@ def stripe_webhook():
         pi = event['data']['object']
         order = Order.query.filter_by(stripe_payment_intent_id=pi['id']).first()
         if order and order.status == 'pending':
-            order.status = 'processing'
+            order.set_status('processing')
             order.stripe_charge_id = pi.get('latest_charge', '')
             db.session.commit()
 
@@ -390,7 +390,7 @@ def stripe_webhook():
         pi = event['data']['object']
         order = Order.query.filter_by(stripe_payment_intent_id=pi['id']).first()
         if order:
-            order.status = 'cancelled'
+            order.set_status('cancelled')
             db.session.commit()
 
     elif event['type'] == 'checkout.session.completed':

@@ -28,7 +28,7 @@
             {% for order in orders %}
             <tr>
               <td class="fw-600">{{ order.order_number }}</td>
-              <td class="text-muted">{{ order.created_at.strftime('%b %d, %Y') }}</td>
+              <td class="text-muted">{{ order.created_at|local_time('%b %d, %Y') }}</td>
               <td class="text-muted">{{ order.items|length }} item{{ 's' if order.items|length != 1 }}</td>
               <td class="fw-600">${{ "%.2f"|format(order.total) }}</td>
               <td><span class="badge status-{{ order.status }}">{{ order.status_label }}</span></td>

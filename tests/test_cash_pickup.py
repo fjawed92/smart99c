@@ -7,7 +7,7 @@ from app.services import pickup
 
 
 def _local(y, m, d, h, mi=0):
-    return datetime(y, m, d, h, mi, tzinfo=pickup.STORE_TZ)
+    return datetime(y, m, d, h, mi, tzinfo=pickup.store_tz())
 
 
 def _deadline_local(placed_local):

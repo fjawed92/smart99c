@@ -15,6 +15,8 @@ from app.models import (Product, ProductImage, ProductVariant, Category, Order,
                         ShippingAddress)
 from app.helpers import (generate_slug, get_site_setting, set_site_setting,
                          encrypt_secret)
+from app.timezones import (local_today, day_start_utc, day_end_utc, parse_day,
+                           format_local, tz_label, zone_choices, valid_zone, forget_tz)
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -33,12 +35,13 @@ def admin_required(f):
 @admin_bp.route('/')
 @admin_required
 def dashboard():
-    today = datetime.utcnow().date()
-    month_start = today.replace(day=1)
+    # "Today" and "this month" are store-calendar days (Admin → Settings time zone).
+    today = local_today()
+    today_start, month_start = day_start_utc(today), day_start_utc(today.replace(day=1))
 
     total_orders = Order.query.count()
     revenue_today = db.session.query(db.func.sum(Order.total))\
-        .filter(db.func.date(Order.created_at) == today,
+        .filter(Order.created_at >= today_start,
                 Order.status.notin_(['cancelled', 'refunded'])).scalar() or 0
     revenue_month = db.session.query(db.func.sum(Order.total))\
         .filter(Order.created_at >= month_start,
@@ -50,7 +53,7 @@ def dashboard():
         Product.is_active == True
     ).count()
     new_customers = User.query.filter(
-        db.func.date(User.created_at) >= month_start,
+        User.created_at >= month_start,
         User.is_admin == False
     ).count()
     recent_orders = Order.query.order_by(Order.created_at.desc()).limit(10).all()
@@ -265,16 +268,18 @@ def orders_export():
     ws = wb.active
     ws.title = 'Orders'
 
-    header = ['Order #', 'Date', 'Status', 'Customer', 'Email', 'Phone',
+    zone = tz_label()
+    header = ['Order #', f'Date ({zone})', 'Status', 'Customer', 'Email', 'Phone',
               'Items', 'Pickup / Delivery', 'Subtotal', 'Promo Code', 'Promo Discount', 'Cash Discount',
-              'Tax', 'Shipping', 'Service Fee', 'Total', 'Payment Intent']
+              'Tax', 'Shipping', 'Service Fee', 'Total', 'Payment Intent',
+              'Ready', 'Picked up', 'Shipped', 'Delivered', 'No-show', 'Cancelled', 'Refunded']
     for i, h in enumerate(header, start=1):
         c = ws.cell(row=1, column=i, value=h)
         c.font = Font(bold=True, color='FFFFFF')
         c.fill = PatternFill('solid', fgColor='E8334A')
         c.alignment = Alignment(horizontal='left', vertical='center')
 
-    widths = [14, 18, 12, 24, 28, 16, 50, 30, 10, 12, 12, 12, 10, 11, 12, 10, 32]
+    widths = [14, 18, 12, 24, 28, 16, 50, 30, 10, 12, 12, 12, 10, 11, 12, 10, 32] + [17] * 7
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
 
@@ -286,7 +291,7 @@ def orders_export():
         addr = o.shipping_address
         ws.append([
             o.order_number,
-            o.created_at.strftime('%Y-%m-%d %H:%M') if o.created_at else '',
+            format_local(o.created_at, '%Y-%m-%d %H:%M'),
             o.status,
             addr.full_name if addr else (o.user.full_name if o.user else ''),
             addr.email if addr else (o.user.email if o.user else ''),
@@ -302,12 +307,15 @@ def orders_export():
             float(o.service_fee or 0),
             float(o.total or 0),
             o.stripe_payment_intent_id or '',
+            *(format_local(getattr(o, col), '%Y-%m-%d %H:%M')
+              for col in ('ready_at', 'picked_up_at', 'shipped_at', 'delivered_at',
+                          'no_show_at', 'cancelled_at', 'refunded_at')),
         ])
 
     buf = BytesIO()
     wb.save(buf)
     buf.seek(0)
-    stamp = datetime.utcnow().strftime('%Y%m%d')
+    stamp = local_today().strftime('%Y%m%d')
     return send_file(buf,
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                      as_attachment=True,
@@ -476,7 +484,7 @@ def products_export():
     from app.services.product_export import build_catalog_workbook, workbook_to_bytes
     wb = build_catalog_workbook()
     buf = workbook_to_bytes(wb)
-    stamp = datetime.utcnow().strftime('%Y%m%d')
+    stamp = local_today().strftime('%Y%m%d')
     return send_file(buf,
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                      as_attachment=True,
@@ -769,10 +777,11 @@ def orders():
             conds.append(ShippingAddress.phone.ilike(f'%{digits[-4:]}%'))
         query = query.join(ShippingAddress, isouter=True).filter(db.or_(*conds))
         tab = 'all' if 'tab' not in request.args else tab
-    if date_from:
-        query = query.filter(Order.created_at >= date_from)
-    if date_to:
-        query = query.filter(Order.created_at <= date_to + ' 23:59:59')
+    day_from, day_to = parse_day(date_from), parse_day(date_to)
+    if day_from:
+        query = query.filter(Order.created_at >= day_start_utc(day_from))
+    if day_to:
+        query = query.filter(Order.created_at < day_end_utc(day_to))
     if status and tab == 'all':
         query = query.filter_by(status=status)
 
@@ -852,7 +861,7 @@ def update_order_status(order_id):
         from app.services.pickup import restock
         restock(order)
 
-    order.status = new_status
+    order.set_status(new_status)
     db.session.commit()
     flash(f'Order {order.order_number} status updated to {new_status}.', 'success')
     return redirect(url_for('admin.order_detail', order_id=order_id))
@@ -862,7 +871,8 @@ def update_order_status(order_id):
 @admin_required
 def order_pickup_action(order_id):
     """One-tap actions from the orders list and order page."""
-    from app.services.pickup import restock, email_customer, to_utc, STORE_TZ
+    from app.services.pickup import restock, email_customer, to_utc
+    from app.timezones import store_tz
     order = Order.query.get_or_404(order_id)
     action = request.form.get('action', '')
     back = request.form.get('next') or url_for('admin.order_detail', order_id=order.id)
@@ -880,8 +890,7 @@ def order_pickup_action(order_id):
         flash(f'Order {order.order_number} is already {order.status_label.lower()}.', 'warning')
         return redirect(back)
     elif action == 'ready':
-        order.status = 'ready'
-        order.ready_at = now
+        order.set_status('ready', now)
         db.session.commit()
         sent = email_customer(order, 'ready')
         flash(f'{order.order_number} marked ready.'
@@ -889,15 +898,14 @@ def order_pickup_action(order_id):
               'success')
         return redirect(back)
     elif action == 'picked_up':
-        order.status = 'picked_up'
-        order.picked_up_at = now
+        order.set_status('picked_up', now)
         msg = f'{order.order_number} picked up' + (' and paid in cash.' if order.is_cash else '.')
     elif action == 'delivered':
-        order.status = 'delivered'
+        order.set_status('delivered', now)
         msg = f'{order.order_number} marked delivered.'
     elif action in ('no_show', 'cancel'):
         restock(order)
-        order.status = 'no_show' if action == 'no_show' else 'cancelled'
+        order.set_status('no_show' if action == 'no_show' else 'cancelled', now)
         msg = (f'{order.order_number} marked as no-show. Items are back in stock.'
                if action == 'no_show' else f'{order.order_number} cancelled. Items are back in stock.')
     elif action in ('extend_12', 'extend_24', 'extend_date'):
@@ -910,7 +918,7 @@ def order_pickup_action(order_id):
                 return redirect(back)
             from app.store import STORE
             hours = STORE['open_hours'].get(picked.weekday()) or (9, 21)
-            new_deadline = to_utc(picked.replace(hour=hours[1], tzinfo=STORE_TZ))
+            new_deadline = to_utc(picked.replace(hour=hours[1], tzinfo=store_tz()))
         else:
             new_deadline = base + timedelta(hours=12 if action == 'extend_12' else 24)
         order.pickup_deadline = new_deadline
@@ -1392,12 +1400,21 @@ def settings():
                 setting.value = value
             else:
                 db.session.add(SiteSettings(key=key, value=value))
+        zone = (request.form.get('store_timezone') or '').strip()
+        if zone and valid_zone(zone):
+            set_site_setting('store_timezone', zone)
+        elif zone:
+            flash(f'"{zone}" is not a time zone I know, so the time zone was not changed.', 'error')
         db.session.commit()
+        forget_tz()
         flash('Settings saved!', 'success')
         return redirect(url_for('admin.settings'))
 
     settings_dict = {s.key: s.value for s in SiteSettings.query.all()}
-    return render_template('admin/settings.html', settings=settings_dict)
+    from app.timezones import store_tz_name, local_now
+    return render_template('admin/settings.html', settings=settings_dict,
+                           zone_choices=zone_choices(), current_zone=store_tz_name(),
+                           zone_now=local_now(), zone_label=tz_label())
 
 
 # ─── Visitors (site analytics) ───────────────────────────────────────────────

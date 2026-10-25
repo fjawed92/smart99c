@@ -15,8 +15,8 @@ from flask import current_app, g, request, session
 from flask_login import current_user
 
 from app.extensions import db
+from app.timezones import store_tz
 
-STORE_TZ = ZoneInfo('America/New_York')
 
 # Storefront pages worth counting (JSON endpoints, admin and static are left out).
 TRACKED_ENDPOINTS = {
@@ -182,6 +182,7 @@ def build_report(days=30, now=None):
     from app.models import SiteVisit, Product
 
     now = now or datetime.utcnow()
+    STORE_TZ = store_tz()
     local_today = now.replace(tzinfo=ZoneInfo('UTC')).astimezone(STORE_TZ).date()
     first_day = local_today - timedelta(days=days - 1)
     start_local = datetime.combine(first_day, datetime.min.time(), STORE_TZ)

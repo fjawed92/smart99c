@@ -46,6 +46,11 @@ EXTRA_COLUMNS = [
     ('orders', 'promo_code', 'VARCHAR(40)'),
     ('orders', 'promo_discount', 'NUMERIC(10, 2) NOT NULL DEFAULT 0'),
     ('orders', 'cash_discount', 'NUMERIC(10, 2) NOT NULL DEFAULT 0'),
+    ('orders', 'shipped_at', 'TIMESTAMP'),
+    ('orders', 'delivered_at', 'TIMESTAMP'),
+    ('orders', 'cancelled_at', 'TIMESTAMP'),
+    ('orders', 'no_show_at', 'TIMESTAMP'),
+    ('orders', 'refunded_at', 'TIMESTAMP'),
 ]
 
 
