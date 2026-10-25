@@ -136,6 +136,17 @@ that found nothing), and how many go from visit → cart → order. A short
 - Optional: paste a Google Analytics ID (`G-…`) in Admin → Settings to also
   send visits to Google Analytics.
 
+## Time zone
+
+Admin → Settings → **Store Time Zone** decides how every date and time on the
+site is shown. That covers order times, "today" on the dashboard, order date
+filters, the Excel export, pickup deadlines and store hours, sale and promo
+dates, and the Visitors report. Times are saved in UTC, so changing the zone
+never changes saved data, only how it's shown. The code is in `app/timezones.py`.
+
+Each order step is saved with its time (ready, picked up, shipped, delivered,
+no-show, cancelled, refunded) and shown in the order history and the export.
+
 ## Store details
 
 Address, phone, restock day and pickup time live in `app/store.py`.

@@ -54,7 +54,8 @@ def create_app(config_name='default'):
 
     # Cash-pickup reminders and expired holds: checked at most every 5 minutes
     # while the site is in use (there's no separate background worker).
-    from app.services.pickup import process_holds, format_local
+    from app.services.pickup import process_holds
+    from app.timezones import format_local
     app.jinja_env.filters['local_time'] = format_local
 
     def pct(value, places=2):

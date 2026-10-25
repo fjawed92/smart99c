@@ -13,7 +13,7 @@ checkout, Stripe and the saved order always agree. The order of steps:
     5. delivery (checked against the option's minimum order),
     6. the online service fee on card payments.
 """
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from flask import current_app, g, has_app_context
@@ -267,29 +267,22 @@ def quote_json(q):
 
 def day_start_utc(value):
     """'2026-11-01' → that day's midnight in store time, as naive UTC."""
-    from app.services.pickup import STORE_TZ, to_utc
-    try:
-        d = datetime.strptime((value or '').strip(), '%Y-%m-%d').date()
-    except ValueError:
-        return None
-    return to_utc(datetime.combine(d, time(0), tzinfo=STORE_TZ))
+    from app.timezones import parse_day, day_start_utc as start
+    d = parse_day(value)
+    return start(d) if d else None
 
 
 def day_end_utc(value):
     """'2026-11-03' → the end of that day in store time (next midnight), naive UTC."""
-    start = day_start_utc(value)
-    if start is None:
-        return None
-    from app.services.pickup import STORE_TZ, to_local, to_utc
-    local = to_local(start)
-    nxt = datetime.combine(local.date() + timedelta(days=1), time(0), tzinfo=STORE_TZ)
-    return to_utc(nxt)
+    from app.timezones import parse_day, day_end_utc as end
+    d = parse_day(value)
+    return end(d) if d else None
 
 
 def local_day(dt_utc, end=False):
     """Inverse of day_start_utc / day_end_utc, for filling the form back in."""
     if dt_utc is None:
         return ''
-    from app.services.pickup import to_local
+    from app.timezones import to_local
     local = to_local(dt_utc - timedelta(seconds=1) if end else dt_utc)
     return local.strftime('%Y-%m-%d')

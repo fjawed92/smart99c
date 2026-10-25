@@ -22,3 +22,14 @@ document.querySelectorAll('.filters-toggle').forEach(btn => {
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
   });
 });
+
+// Pause the scrolling news banner while the page scrolls, so phones only
+// repaint what moved (keeps the bottom bar smooth on iPhone).
+(function () {
+  let timer = null;
+  window.addEventListener('scroll', () => {
+    if (!timer) document.body.classList.add('is-scrolling');
+    clearTimeout(timer);
+    timer = setTimeout(() => { document.body.classList.remove('is-scrolling'); timer = null; }, 150);
+  }, { passive: true });
+})();

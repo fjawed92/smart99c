@@ -760,3 +760,19 @@ a.tile:hover { transform: translate(-2px, -2px); box-shadow: var(--pop-lg); colo
 .shipping-option-content > .d-flex > div { min-width: 0; }
 .shipping-option-content > .d-flex > span { flex: none; text-align: right; }
 .shipping-option .badge { white-space: normal; text-align: left; line-height: 1.4; }
+
+/* iPhone Safari: keep the bottom bar steady while scrolling.
+   `overflow-x: hidden` on body turns it into its own scroll box on iOS, which
+   makes fixed bars lag and jump; `clip` hides sideways overflow without that. */
+@supports (overflow-x: clip) {
+  html, body { overflow-x: clip; }
+}
+.tabbar, .mobile-sticky-cart { -webkit-transform: translateZ(0); transform: translateZ(0); will-change: transform; -webkit-backface-visibility: hidden; backface-visibility: hidden; }
+.mobile-sticky-cart { transform: translate3d(0, 110%, 0); }
+.mobile-sticky-cart.visible { transform: translate3d(0, 0, 0); }
+.auth-page { min-height: calc(100vh - 220px); min-height: calc(100svh - 220px); }
+@media (hover: none) {
+  /* Fewer repaints per scroll frame on phones */
+  .product-img { mix-blend-mode: normal; }
+  body.is-scrolling .ticker-track { animation-play-state: paused; }
+}

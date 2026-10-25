@@ -73,7 +73,12 @@
           <hr />
           <div class="d-flex justify-content-between"><strong>Total</strong><strong class="text-primary">${{ "%.2f"|format(order.total) }}</strong></div>
           <hr />
-          <p class="text-muted small mb-1">Placed: {{ order.created_at.strftime('%B %d, %Y at %I:%M %p') }}</p>
+          <p class="small fw-700 mb-1">Order history</p>
+          <ul class="list-unstyled small text-muted mb-0">
+            {% for label, when, tone in order.timeline if 'reminder' not in label %}
+            <li class="d-flex justify-content-between gap-3 py-1"><span>{{ label }}</span><span class="text-end">{{ when|local_time('%b %-d, %Y · %-I:%M %p') if when else '' }}</span></li>
+            {% endfor %}
+          </ul>
         </div>
       </div>
     </div>

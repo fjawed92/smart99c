@@ -51,7 +51,7 @@
               </div>
             </td>
             <td class="text-muted">{{ user.email }}</td>
-            <td class="text-muted">{{ user.created_at.strftime('%b %d, %Y') }}</td>
+            <td class="text-muted">{{ user.created_at|local_time('%b %d, %Y') }}</td>
             <td>{{ user.orders.count() }}</td>
             <td>
               <div class="form-check form-switch mb-0">

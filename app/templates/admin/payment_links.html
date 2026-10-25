@@ -36,7 +36,7 @@
       <tbody>
         {% for link in links %}
         <tr>
-          <td>{{ link.created_at.strftime('%Y-%m-%d %H:%M') if link.created_at else '' }}</td>
+          <td>{{ link.created_at|local_time('%Y-%m-%d %H:%M') }}</td>
           <td>
             <a href="{{ url_for('admin.payment_link_detail', link_id=link.id) }}" class="text-decoration-none fw-600">
               {{ link.description }}

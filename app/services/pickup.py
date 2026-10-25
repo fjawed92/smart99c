@@ -6,7 +6,6 @@ timestamp in the app and shown in the store's local time.
 """
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
-from zoneinfo import ZoneInfo
 
 from flask import current_app, url_for
 
@@ -14,7 +13,7 @@ from app.extensions import db
 from app.helpers import get_site_setting
 from app.store import STORE
 
-STORE_TZ = ZoneInfo(STORE.get('timezone', 'America/New_York'))
+from app.timezones import store_tz, to_local, to_utc, format_local  # noqa: F401 (re-exported)
 
 DEFAULTS = {
     'cash_pickup_active': '1',
@@ -50,28 +49,13 @@ def cash_settings():
 
 # ─── Time helpers ────────────────────────────────────────────────────────────
 
-def to_local(dt_utc):
-    if dt_utc is None:
-        return None
-    return dt_utc.replace(tzinfo=ZoneInfo('UTC')).astimezone(STORE_TZ)
-
-
-def to_utc(dt_local):
-    return dt_local.astimezone(ZoneInfo('UTC')).replace(tzinfo=None)
-
-
-def format_local(dt_utc, fmt='%a, %b %-d · %-I:%M %p'):
-    local = to_local(dt_utc)
-    return local.strftime(fmt) if local else ''
-
-
 def _closing_on(day):
     hours = STORE['open_hours'].get(day.weekday())
     if not hours:
         return None, None
     open_h, close_h = hours
-    start = datetime(day.year, day.month, day.day, open_h, tzinfo=STORE_TZ)
-    end = datetime(day.year, day.month, day.day, close_h, tzinfo=STORE_TZ)
+    start = datetime(day.year, day.month, day.day, open_h, tzinfo=store_tz())
+    end = datetime(day.year, day.month, day.day, close_h, tzinfo=store_tz())
     return start, end
 
 
@@ -91,7 +75,7 @@ def pickup_deadline(placed_utc=None, settings=None):
             if deadline <= end:
                 return to_utc(end if deadline < start else deadline)
         day += timedelta(days=1)
-        deadline = datetime(day.year, day.month, day.day, tzinfo=STORE_TZ)
+        deadline = datetime(day.year, day.month, day.day, tzinfo=store_tz())
     return to_utc(deadline)
 
 
@@ -210,7 +194,7 @@ def process_holds(now=None):
         if order.pickup_deadline <= now:
             if settings['expire_action'] == 'auto':
                 restock(order)
-                order.status = 'no_show'
+                order.set_status('no_show', now)
                 db.session.commit()
                 email_customer(order, 'released')
                 released += 1

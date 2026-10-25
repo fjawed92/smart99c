@@ -5,7 +5,6 @@ from app.models import Product, Category
 from app.helpers import get_site_setting
 from app.extensions import db
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 from app.store import STORE
 
 main_bp = Blueprint('main', __name__)
@@ -55,8 +54,9 @@ def index():
 
 
 def next_restock_iso(now=None):
-    """Next weekly restock (store's local time, New York) as an ISO timestamp."""
-    tz = ZoneInfo('America/New_York')
+    """Next weekly restock (in the store's time zone) as an ISO timestamp."""
+    from app.timezones import store_tz
+    tz = store_tz()
     now = now or datetime.now(tz)
     weekday, hour = STORE['restock_weekday'], STORE['restock_hour']
     target = now.replace(hour=hour, minute=0, second=0, microsecond=0) + timedelta(days=(weekday - now.weekday()) % 7)
