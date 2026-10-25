@@ -30,7 +30,18 @@ def admin_required(f):
     return login_required(decorated)
 
 
+# Pages that change product details. With IZYOPS_OWNS_CATALOG on, saving any
+# of them is refused (app/__init__.py): IZY Ops is where products are edited.
+CATALOG_ENDPOINTS = {
+    'admin.new_product', 'admin.edit_product', 'admin.delete_product', 'admin.toggle_product',
+    'admin.bulk_product_action', 'admin.delete_product_image', 'admin.create_variant',
+    'admin.update_variant', 'admin.delete_variant', 'admin.products_import_upload',
+    'admin.products_import_confirm', 'admin.izyops_add',
+}
+
+
 # ─── Dashboard ───────────────────────────────────────────────────────────────
+
 
 @admin_bp.route('/')
 @admin_required
@@ -112,7 +123,8 @@ def products():
                            categories=categories,
                            search=search,
                            category_id=category_id,
-                           status=status)
+                           status=status,
+                           catalog_locked=current_app.config.get('IZYOPS_OWNS_CATALOG'))
 
 
 @admin_bp.route('/products/new', methods=['GET', 'POST'])

@@ -34,6 +34,18 @@ class Config:
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
     MAIL_DEFAULT_SENDER = os.environ.get('MAIL_USERNAME')
 
+    # IZY Ops connection (the back office manages this site's products, stock
+    # and orders through /api/izyops). Its own login, separate from the
+    # IZYOPS_USERNAME / IZYOPS_PASSWORD this site uses to read IZY Ops.
+    IZYOPS_API_USERNAME = os.environ.get('IZYOPS_API_USERNAME')
+    IZYOPS_API_PASSWORD = os.environ.get('IZYOPS_API_PASSWORD')
+    # "An order just changed" ping to IZY Ops (Settings → Websites shows both).
+    IZYOPS_NOTIFY_URL = os.environ.get('IZYOPS_NOTIFY_URL')
+    IZYOPS_NOTIFY_KEY = os.environ.get('IZYOPS_NOTIFY_KEY')
+    # 1 = product details are edited in IZY Ops only; the admin product pages
+    # become read-only. Off until the catalog has been imported into IZY Ops.
+    IZYOPS_OWNS_CATALOG = os.environ.get('IZYOPS_OWNS_CATALOG', '').strip().lower() in ('1', 'true', 'yes', 'on')
+
     # App
     TAX_RATE = float(os.environ.get('TAX_RATE', '0.08875'))  # NY tax rate
     PRODUCTS_PER_PAGE = 12

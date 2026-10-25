@@ -281,6 +281,8 @@ class Order(db.Model):
     no_show_at = db.Column(db.DateTime)
     refunded_at = db.Column(db.DateTime)
     reminder_sent_at = db.Column(db.DateTime)
+    # Given back to the card so far (refunds from IZY Ops, partial or full).
+    amount_refunded = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

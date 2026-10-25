@@ -94,6 +94,35 @@ Set these in Render → Environment (then the site restarts):
 This uses IzyOps' `/api/v2/products` and `/api/v2/catalog/facets`, read-only.
 Costs are shown in the admin screen only, never to shoppers.
 
+### Letting IZY Ops manage the website
+
+IZY Ops can run this site the way it runs family99c: it sends product details,
+prices and stock here, and brings every order back to its Website Orders board
+and the registers' 🛒 Website Orders button. The site offers the same
+`/api/izyops` connection family99c does.
+
+1. In Render → Environment, set a login for IZY Ops (any username, a long
+   random password):
+
+   | Variable | Example |
+   |----------|---------|
+   | `IZYOPS_API_USERNAME` | `izyops` |
+   | `IZYOPS_API_PASSWORD` | a long random password |
+
+2. In IZY Ops: Settings → Websites → Add a website → Smart 99c. Use
+   `https://<this site>/api/izyops` and the login above, then Test connection
+   and Import products from website.
+3. Optional, for instant order updates: in that card press Create website key
+   and copy the two lines it shows into Render → Environment:
+   `IZYOPS_NOTIFY_URL` and `IZYOPS_NOTIFY_KEY`.
+4. Once the import looks right, set `IZYOPS_OWNS_CATALOG=1`. The admin's
+   product pages become view-only; change products in IZY Ops from then on.
+
+Every product and colour gets a permanent item number (`SC99-00042`,
+`SC99-00042-V7`) the first time IZY Ops reads the catalog; numbers already set
+are kept. Cash-at-pickup orders show on the register as "Cash due", and the
+cashier collects them there.
+
 ## Discounts & delivery options
 
 Admin → **Discounts**:
