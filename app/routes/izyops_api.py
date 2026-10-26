@@ -661,14 +661,20 @@ def refund_order(order_id):
         return _err('Not found', 404)
     if order.is_cash or not order.stripe_payment_intent_id:
         return _err('not_refundable', 409, message='This order was not paid by card online')
+    request_id = str(body.get('request_id') or '').strip()[:60]
+    tag = f'[ref {request_id}]' if request_id else None
+    if tag and tag in (order.notes or ''):
+        # A retry of a refund already made (IZY Ops never got our reply):
+        # Stripe would hand back the same refund, so don't count it again.
+        return _ok({'refund_id': None, 'amount': _money(amount), 'order': serialize_order(order),
+                    'duplicate': True})
     left = Decimal(order.total) - Decimal(order.amount_refunded or 0)
     if amount > left:
         return _err('not_refundable', 409, message=f'At most ${left:.2f} can still be refunded')
 
     stripe.api_key = current_app.config.get('STRIPE_SECRET_KEY')
     cents = int(amount * 100)
-    request_id = str(body.get('request_id') or '').strip()[:60]
-    key = f'izyops_refund_{order.id}_{cents}' + (f'_{request_id}' if request_id else '')
+    key =f'izyops_refund_{order.id}_{cents}' + (f'_{request_id}' if request_id else '')
     try:
         refund = stripe.Refund.create(
             payment_intent=order.stripe_payment_intent_id,
@@ -684,7 +690,7 @@ def refund_order(order_id):
 
     order.amount_refunded = (Decimal(order.amount_refunded or 0) + amount).quantize(_CENT)
     _note(order, f"${amount:.2f} refunded to the card by {str(body.get('actor') or 'IZY Ops')[:80]}"
-          + (f" — {body.get('reason')}" if body.get('reason') else ''), _now())
+          + (f" — {body.get('reason')}" if body.get('reason') else '') + (f' {tag}' if tag else ''), _now())
     db.session.commit()
     return _ok({'refund_id': refund.get('id') if hasattr(refund, 'get') else getattr(refund, 'id', None),
                 'amount': _money(amount), 'order': serialize_order(order)})
