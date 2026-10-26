@@ -26,12 +26,12 @@
   <div class="d-flex align-items-center gap-3">
     <i class="bi bi-shop fs-1"></i>
     <div>
-      <div class="fw-800 fs-4">STORE PICKUP · PAY CASH</div>
-      <div class="opacity-75">Nothing has been charged. Collect cash at the counter.</div>
+      <div class="fw-800 fs-4">STORE PICKUP · {{ 'PAID AT REGISTER' if order.cash_paid else 'PAY AT REGISTER' }}</div>
+      <div class="opacity-75">{% if order.cash_paid %}The register took the money{% if order.cash_paid_at %} ({{ order.cash_paid_at|local_time('%b %-d, %-I:%M %p') }}){% endif %}. Just hand it over.{% else %}Nothing has been charged. Ring it up on the register when the customer picks up.{% endif %}</div>
     </div>
   </div>
   <div class="text-end">
-    <div class="small fw-700 opacity-75">{% if order.status == 'picked_up' %}Collected{% else %}Collect{% endif %}</div>
+    <div class="small fw-700 opacity-75">{% if order.cash_paid %}Collected{% else %}Collect{% endif %}</div>
     <div class="fw-800 fs-2">${{ "%.2f"|format(order.total) }}</div>
   </div>
 </div>
@@ -107,7 +107,7 @@
         {% if order.service_fee and order.service_fee > 0 %}
         <div class="d-flex justify-content-between mb-1"><span>Online service fee</span><span>${{ "%.2f"|format(order.service_fee) }}</span></div>
         {% endif %}
-        <div class="d-flex justify-content-between fs-5 mt-2"><strong>{% if order.is_cash %}Cash due{% else %}Total paid{% endif %}</strong><strong class="text-primary">${{ "%.2f"|format(order.total) }}</strong></div>
+        <div class="d-flex justify-content-between fs-5 mt-2"><strong>{% if order.cash_paid %}Paid at register{% elif order.is_cash %}Pay at register{% else %}Total paid{% endif %}</strong><strong class="text-primary">${{ "%.2f"|format(order.total) }}</strong></div>
       </div>
     </div>
 

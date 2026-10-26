@@ -116,8 +116,8 @@
               {% if order.is_pickup %}<span class="badge rounded-pill text-bg-info">Pickup</span>{% elif order.is_pickup is none %}<span class="badge rounded-pill text-bg-warning">Not recorded</span>{% else %}<span class="badge rounded-pill text-bg-secondary">Delivery</span>{% endif %}
               <br>
               {% if order.is_cash %}
-                {% if order.status == 'picked_up' %}<span class="badge rounded-pill text-bg-success mt-1">Cash paid</span>
-                {% elif order.is_open %}<span class="badge rounded-pill text-bg-warning mt-1">Cash due</span>
+                {% if order.cash_paid %}<span class="badge rounded-pill text-bg-success mt-1">Paid at register</span>
+                {% elif order.is_open %}<span class="badge rounded-pill text-bg-warning mt-1">Pay at register</span>
                 {% else %}<span class="badge rounded-pill text-bg-light mt-1">Not paid</span>{% endif %}
               {% else %}<span class="badge rounded-pill text-bg-success mt-1">Paid online</span>{% endif %}
             </td>

@@ -471,7 +471,7 @@ def pay_status(order):
     if order.status == 'pending':
         return 'not_paid'
     if order.is_cash:
-        return 'paid_instore' if order.status in ('picked_up', 'delivered') else 'not_paid'
+        return 'paid_instore' if order.cash_paid else 'not_paid'
     if order.amount_refunded and order.amount_refunded >= order.total:
         return 'refunded'
     return 'paid_online'
@@ -574,7 +574,13 @@ def _note(order, text, now):
 @require_izyops_auth
 def update_order(order_id):
     """``{"status": "making"|"ready"|"completed"|"canceled", "actor", "note",
-    "edit": {customer_name, customer_phone, customer_email, notes}}``.
+    "edit": {customer_name, customer_phone, customer_email, notes},
+    "pay_status": "paid_instore"}``.
+
+    ``pay_status: "paid_instore"``: the customer of a cash order paid at the
+    store's register. It is recorded (cash_paid_at, "Paid at register")
+    before anything else, so a finished order still learns it, and a paid
+    hold is never released as a no-show.
 
     ready emails the customer (as the admin's Ready button does); completed
     is Picked up, or Delivered for a delivery; canceled puts the stock back.
@@ -586,8 +592,11 @@ def update_order(order_id):
     body = request.get_json(silent=True) or {}
     status = body.get('status')
     edit = body.get('edit')
-    if status is None and edit is None:
-        return _err("Send a 'status', an 'edit', or both")
+    paid = body.get('pay_status')
+    if paid is not None and paid != 'paid_instore':
+        return _err("'pay_status' can only be 'paid_instore'")
+    if status is None and edit is None and paid is None:
+        return _err("Send a 'status', an 'edit', a 'pay_status', or a mix")
     if status is not None and status not in ('making', 'ready', 'completed', 'canceled'):
         return _err("'status' must be one of ['canceled', 'completed', 'making', 'ready']")
     if edit is not None and not isinstance(edit, dict):
@@ -598,6 +607,14 @@ def update_order(order_id):
     order = Order.query.filter(Order.id == order_id, Order.status != 'pending').first()
     if order is None:
         return _err('Not found', 404)
+
+    if paid is not None and order.is_cash and order.cash_paid_at is None and order.status not in _RESTOCKED:
+        now = _now()
+        order.cash_paid_at = now
+        _note(order, f"{str(body.get('actor') or 'IZY Ops').strip()[:80]}: paid at register", now)
+        db.session.commit()
+    if status is None and edit is None:
+        return _ok(serialize_order(order))
 
     target = {'making': 'processing', 'ready': 'ready', 'canceled': 'cancelled'}.get(status)
     if status == 'completed':

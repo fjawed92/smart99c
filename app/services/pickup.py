@@ -187,8 +187,10 @@ def process_holds(now=None):
     now = now or datetime.utcnow()
     settings = cash_settings()
     reminded = released = 0
+    # A hold already paid at the register is the customer's: never released.
     open_cash = Order.query.filter(Order.payment_method == 'cash',
                                    Order.status.in_(Order.OPEN_STATUSES),
+                                   Order.cash_paid_at.is_(None),
                                    Order.pickup_deadline.isnot(None)).all()
     for order in open_cash:
         if order.pickup_deadline <= now:
