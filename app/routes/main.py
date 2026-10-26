@@ -20,7 +20,7 @@ class ContactForm(FlaskForm):
 @main_bp.route('/')
 def index():
     featured_products = Product.query.filter_by(is_active=True, is_featured=True)\
-        .order_by(Product.updated_at.desc()).limit(8).all()
+        .order_by(*Product.store_order()).limit(8).all()
     new_products = Product.query.filter_by(is_active=True)\
         .order_by(Product.created_at.desc()).limit(8).all()
     categories = Category.shoppable()\

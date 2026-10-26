@@ -8,17 +8,10 @@
     <form method="POST" action="{{ url_for('admin.settings') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
 
-      <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-white border-0 pt-3">
-          <h6 class="fw-700 mb-0">Store Announcement</h6>
-        </div>
-        <div class="card-body">
-          <label class="form-label">Announcement Bar Text</label>
-          <input type="text" name="announcement" class="form-control"
-                 value="{{ settings.get('announcement', '') }}"
-                 placeholder="e.g. Free shipping on orders over $50! 🎉" />
-          <small class="text-muted">Leave blank to hide the announcement bar.</small>
-        </div>
+      <div class="alert alert-light border d-flex gap-2 align-items-start mb-4">
+        <i class="bi bi-megaphone"></i>
+        <div>The scrolling banner messages and the "Shop by price" buttons are in
+          <a href="{{ url_for('admin.storefront') }}">Banner &amp; Filters</a>.</div>
       </div>
 
       <div class="card border-0 shadow-sm mb-4">

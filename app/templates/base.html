@@ -105,20 +105,17 @@
     </div>
   </header>
 
-  {% set ticker_items = [announcement] + sale_banners + [
-      cash_banner,
-      'Pokémon TCG restock ' ~ store.restock_label,
-      ('Free local delivery over $' ~ store.free_delivery_over) if store.free_delivery_over else '',
-      'Same-day pickup in West Babylon',
-      'Board games, plush & action figures',
-      'Sleeves, binders & toploaders'
-  ] | select | list %}
+  {% if ticker_items %}
+  {# Repeat short lists so the strip stays full, and keep the scroll speed steady however much text there is. #}
+  {% set ticker_chars = (ticker_items | join | length) + 8 * (ticker_items | length) %}
+  {% set ticker_reps = [1, (160 / ticker_chars) | round(0, 'ceil') | int] | max %}
   <div class="ticker" aria-label="Store news">
-    <div class="ticker-track" aria-hidden="true">
-      {% for _ in range(2) %}{% for t in ticker_items %}<span>{{ t }}</span>{% endfor %}{% endfor %}
+    <div class="ticker-track" aria-hidden="true" style="animation-duration: {{ [15, (ticker_chars * ticker_reps * 0.19) | round | int] | max }}s">
+      {% for _ in range(2) %}{% for _ in range(ticker_reps) %}{% for t in ticker_items %}<span>{{ t }}</span>{% endfor %}{% endfor %}{% endfor %}
     </div>
     <span class="visually-hidden">{{ ticker_items | join('. ') }}</span>
   </div>
+  {% endif %}
 
   {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}

@@ -116,7 +116,10 @@ def products():
     elif status == 'inactive':
         query = query.filter_by(is_active=False)
 
-    pagination = query.order_by(Product.created_at.desc()).paginate(page=page, per_page=20)
+    per_page = request.args.get('per_page', 20, type=int)
+    if per_page not in (20, 50, 100, 500):
+        per_page = 20
+    pagination = query.order_by(*Product.store_order()).paginate(page=page, per_page=per_page)
     categories = Category.query.order_by(Category.name).all()
     return render_template('admin/products.html',
                            pagination=pagination,
@@ -125,6 +128,7 @@ def products():
                            search=search,
                            category_id=category_id,
                            status=status,
+                           per_page=per_page,
                            catalog_mode=izyops_mode.catalog_mode(),
                            izyops_connected=bool(get_site_setting(izyops_mode.SETTING_KEY, '')))
 
@@ -267,6 +271,64 @@ def bulk_product_action(action=None):
     else:
         flash('Unknown action.', 'error')
 
+    return redirect(request.referrer or url_for('admin.products'))
+
+
+# Store order is website-only, so it stays editable when IZY Ops runs the catalog.
+def _renumber(ordered_ids):
+    """Save the whole store order as 1, 2, 3… from a full list of product ids."""
+    current = {pid: so for pid, so in db.session.query(Product.id, Product.sort_order)}
+    for position, pid in enumerate(ordered_ids, start=1):
+        if current.get(pid) != position:
+            Product.query.filter_by(id=pid).update({'sort_order': position},
+                                                   synchronize_session=False)
+
+
+def _store_order_ids():
+    return [pid for (pid,) in db.session.query(Product.id).order_by(*Product.store_order())]
+
+
+@admin_bp.route('/products/reorder', methods=['POST'])
+@admin_required
+def reorder_products():
+    """Drag and drop on the Products page: the rows on screen, in their new order.
+
+    Only those products move, and only among the spots they already held,
+    so products on other pages (or hidden by a filter) keep their place.
+    """
+    data = request.get_json(silent=True) or {}
+    try:
+        moved = [int(i) for i in data.get('ids', [])]
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'message': 'Bad product list.'}), 400
+    order = _store_order_ids()
+    known = set(order)
+    moved = [pid for pid in dict.fromkeys(moved) if pid in known]
+    if not moved:
+        return jsonify({'success': False, 'message': 'No products to move.'}), 400
+    moved_set = set(moved)
+    slots = iter(moved)
+    order = [next(slots) if pid in moved_set else pid for pid in order]
+    _renumber(order)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@admin_bp.route('/products/move', methods=['POST'])
+@admin_required
+def move_products():
+    """Send the ticked products to the very top or bottom of the store order."""
+    where = request.form.get('where')
+    ids = [int(i) for i in request.form.getlist('product_ids') if str(i).isdigit()]
+    if not ids or where not in ('top', 'bottom'):
+        flash('Select at least one product.', 'error')
+        return redirect(request.referrer or url_for('admin.products'))
+    order, ids = _store_order_ids(), set(ids)
+    picked = [pid for pid in order if pid in ids]
+    rest = [pid for pid in order if pid not in ids]
+    _renumber(picked + rest if where == 'top' else rest + picked)
+    db.session.commit()
+    flash(f'Moved {len(picked)} product(s) to the {where} of the shop.', 'success')
     return redirect(request.referrer or url_for('admin.products'))
 
 
@@ -1445,7 +1507,6 @@ def delete_promo(promo_id):
 def settings():
     if request.method == 'POST':
         keys = [
-            'announcement',
             'store_hours',
             'tax_rate',
             'service_fee_active',
@@ -1488,6 +1549,43 @@ def settings():
     return render_template('admin/settings.html', settings=settings_dict,
                            zone_choices=zone_choices(), current_zone=store_tz_name(),
                            zone_now=local_now(), zone_label=tz_label())
+
+
+# ─── Banner & shop filters ───────────────────────────────────────────────────
+
+@admin_bp.route('/storefront', methods=['GET', 'POST'])
+@admin_required
+def storefront():
+    from app.services import storefront as sf
+    if request.method == 'POST':
+        part = request.form.get('part')
+        if part == 'ticker':
+            items = sf.save_ticker_messages(request.form.getlist('text'),
+                                            request.form.getlist('active'))
+            set_site_setting('ticker_free_delivery_active',
+                             '1' if request.form.get('ticker_free_delivery_active') == 'on' else '')
+            db.session.commit()
+            shown = sum(1 for m in items if m['active'])
+            flash(f'Banner saved: {shown} message(s) showing.', 'success')
+        elif part == 'filters':
+            f = request.form
+            items, problems = sf.save_shop_filters(
+                f.getlist('kind'), f.getlist('label'), f.getlist('note'),
+                f.getlist('min'), f.getlist('max'), f.getlist('active'))
+            db.session.commit()
+            for problem in problems:
+                flash(problem, 'warning')
+            flash(f'Shop buttons saved: {sum(1 for i in items if i["active"])} showing.', 'success')
+        elif part in ('reset_ticker', 'reset_filters'):
+            sf.reset(sf.TICKER_KEY if part == 'reset_ticker' else sf.FILTERS_KEY)
+            db.session.commit()
+            flash('Put back the starter list.', 'success')
+        return redirect(url_for('admin.storefront') + ('#filters' if 'filters' in (part or '') else ''))
+
+    return render_template('admin/storefront.html',
+                           messages=sf.ticker_messages(),
+                           filters=sf.shop_filters(include_hidden=True),
+                           free_delivery_on=get_site_setting('ticker_free_delivery_active', '1') == '1')
 
 
 # ─── Visitors (site analytics) ───────────────────────────────────────────────

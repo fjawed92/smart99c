@@ -1,11 +1,17 @@
-{# "Shop by price" buttons. Pass pc_endpoint, pc_args, pc_active (max price) and pc_deals via {% with %}. #}
-{% set price_steps = [(0.99, '99¢'), (1.99, '$1.99'), (4.99, '$4.99'), (9.99, '$9.99')] %}
+{# "Shop by price" buttons (Admin → Banner & Filters). Pass pc_endpoint, pc_args, pc_min, pc_max and pc_deals via {% with %}. #}
+{% set chips = shop_filters() %}
+{% if chips %}
 <nav class="pricechips" aria-label="Shop by price">
-  {% for amt, label in price_steps %}
-  {% set on = pc_active == amt %}
-  <a href="{{ url_for(pc_endpoint, **pc_args) if on else url_for(pc_endpoint, max_price=amt, **pc_args) }}"
-     class="pchip{% if on %} is-active{% endif %}"{% if on %} aria-current="true"{% endif %}><b>{{ label }}</b> &amp; under</a>
-  {% endfor %}
+  {% for f in chips %}
+  {% if f.kind == 'sale' %}
   <a href="{{ url_for(pc_endpoint, **pc_args) if pc_deals else url_for(pc_endpoint, deals=1, **pc_args) }}"
-     class="pchip deal{% if pc_deals %} is-active{% endif %}"{% if pc_deals %} aria-current="true"{% endif %}><i class="bi bi-tag-fill"></i> On sale</a>
+     class="pchip deal{% if pc_deals %} is-active{% endif %}"{% if pc_deals %} aria-current="true"{% endif %}><i class="bi bi-tag-fill"></i> {{ f.label }}{% if f.note %} {{ f.note }}{% endif %}</a>
+  {% else %}
+  {% set lo = f.min | float if f.min else none %}{% set hi = f.max | float if f.max else none %}
+  {% set on = pc_min == lo and pc_max == hi %}
+  <a href="{{ url_for(pc_endpoint, **pc_args) if on else url_for(pc_endpoint, min_price=lo, max_price=hi, **pc_args) }}"
+     class="pchip{% if on %} is-active{% endif %}"{% if on %} aria-current="true"{% endif %}><b>{{ f.label }}</b>{% if f.note %} {{ f.note }}{% endif %}</a>
+  {% endif %}
+  {% endfor %}
 </nav>
+{% endif %}
