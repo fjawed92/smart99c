@@ -87,6 +87,9 @@ class Product(db.Model):
     # Barcode and IzyOps catalog link — set when a product is pulled from IzyOps.
     upc = db.Column(db.String(120), index=True)
     izyops_product_id = db.Column(db.Integer, index=True)
+    # Store order set by dragging rows in Admin → Products (1 = first).
+    # New products start at 0, so they show first until moved.
+    sort_order = db.Column(db.Integer, default=0, nullable=False, server_default='0')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -97,6 +100,11 @@ class Product(db.Model):
                                cascade='all, delete-orphan',
                                order_by='ProductVariant.sort_order, ProductVariant.id')
     order_items = db.relationship('OrderItem', back_populates='product')
+
+    @staticmethod
+    def store_order():
+        """ORDER BY for the owner's drag-and-drop order (newest first on ties)."""
+        return (Product.sort_order.asc(), Product.created_at.desc(), Product.id.desc())
 
     @property
     def primary_image(self):

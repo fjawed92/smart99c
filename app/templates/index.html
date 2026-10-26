@@ -67,7 +67,7 @@
 
   <div class="shopby">
     <h2>Shop by <span class="scr">price</span></h2>
-    {% with pc_endpoint='shop.shop', pc_args={}, pc_active=None, pc_deals=False %}{% include '_price_chips.html' %}{% endwith %}
+    {% with pc_endpoint='shop.shop', pc_args={}, pc_min=None, pc_max=None, pc_deals=False %}{% include '_price_chips.html' %}{% endwith %}
   </div>
 </section>
 

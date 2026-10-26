@@ -20,7 +20,7 @@ def shop_category(category_slug):
 def _product_list(category_slug=None, current_category=None):
     page = request.args.get('page', 1, type=int)
     search = request.args.get('q', '').strip()
-    sort = request.args.get('sort', 'newest')
+    sort = request.args.get('sort', 'featured')
     min_price = request.args.get('min_price', type=float)
     max_price = request.args.get('max_price', type=float)
     deals = request.args.get('deals') == '1'
@@ -54,13 +54,17 @@ def _product_list(category_slug=None, current_category=None):
             query = query.filter(on_sale)
 
     sort_map = {
+        'featured': Product.store_order(),
         'newest': Product.created_at.desc(),
         'oldest': Product.created_at.asc(),
         'price_asc': Product.price.asc(),
         'price_desc': Product.price.desc(),
         'name_asc': Product.name.asc(),
     }
-    query = query.order_by(sort_map.get(sort, Product.created_at.desc()))
+    if sort not in sort_map:
+        sort = 'featured'
+    order = sort_map[sort]
+    query = query.order_by(*order) if isinstance(order, tuple) else query.order_by(order)
 
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     g.visit_search_results = pagination.total

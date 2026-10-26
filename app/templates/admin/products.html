@@ -62,6 +62,11 @@
           <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactive</option>
         </select>
       </div>
+      <div class="col-md-auto">
+        <select name="per_page" class="form-select" aria-label="Products per page">
+          {% for n in (20, 50, 100, 500) %}<option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }} per page</option>{% endfor %}
+        </select>
+      </div>
       <div class="col-md-auto d-flex gap-2">
         <button type="submit" class="btn btn-outline-primary flex-fill">Filter</button>
         <a href="{{ url_for('admin.products') }}" class="btn btn-outline-secondary flex-fill">Reset</a>
@@ -91,7 +96,20 @@
     <button type="button" class="btn btn-sm btn-outline-danger" data-bulk-action="delete">
       <i class="bi bi-trash me-1"></i>Delete
     </button>
+    <span class="vr mx-1"></span>
+    <button type="submit" class="btn btn-sm btn-outline-primary" formaction="{{ url_for('admin.move_products') }}" name="where" value="top">
+      <i class="bi bi-arrow-bar-up me-1"></i>Move to top
+    </button>
+    <button type="submit" class="btn btn-sm btn-outline-primary" formaction="{{ url_for('admin.move_products') }}" name="where" value="bottom">
+      <i class="bi bi-arrow-bar-down me-1"></i>Move to bottom
+    </button>
   </div>
+
+  <p class="small text-muted mb-2" id="reorderHint">
+    <i class="bi bi-grip-vertical"></i> Drag a row by its handle to change the order products show in the shop ("Our picks").
+    To move something to another page, tick it and use <b>Move to top</b> / <b>Move to bottom</b>, or show more per page.
+    <span class="text-success fw-700 d-none" id="reorderSaved"><i class="bi bi-check-circle"></i> Order saved</span>
+  </p>
 
   <div class="card border-0 shadow-sm">
     <div class="card-body p-0">
@@ -99,6 +117,7 @@
         <table class="table table-hover align-middle mb-0 table-stack">
           <thead class="table-light">
             <tr>
+              <th style="width:28px;" aria-label="Drag to reorder"></th>
               <th style="width:36px;">
                 <input type="checkbox" id="selectAllProducts" class="form-check-input" aria-label="Select all" />
               </th>
@@ -112,9 +131,12 @@
               <th>Actions</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="productRows">
             {% for product in products %}
-            <tr>
+            <tr data-id="{{ product.id }}">
+              <td class="stack-inline drag-handle" title="Drag to reorder" style="cursor:grab;touch-action:none;">
+                <i class="bi bi-grip-vertical text-muted fs-5"></i>
+              </td>
               <td class="stack-inline">
                 <input type="checkbox" name="product_ids" value="{{ product.id }}"
                        class="form-check-input product-checkbox" aria-label="Select {{ product.name }}" />
@@ -179,7 +201,7 @@
               </td>
             </tr>
             {% else %}
-            <tr><td colspan="9" class="text-center py-5 text-muted">No products found</td></tr>
+            <tr><td colspan="10" class="text-center py-5 text-muted">No products found</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -193,19 +215,19 @@
 <nav class="mt-4">
   <ul class="pagination justify-content-center">
     {% if pagination.has_prev %}
-    <li class="page-item"><a class="page-link" href="{{ url_for('admin.products', page=pagination.prev_num, q=search) }}"><i class="bi bi-chevron-left"></i></a></li>
+    <li class="page-item"><a class="page-link" href="{{ url_for('admin.products', page=pagination.prev_num, q=search, category_id=category_id, status=status or None, per_page=per_page) }}"><i class="bi bi-chevron-left"></i></a></li>
     {% endif %}
     {% for p in pagination.iter_pages() %}
       {% if p %}
       <li class="page-item {% if p == pagination.page %}active{% endif %}">
-        <a class="page-link" href="{{ url_for('admin.products', page=p, q=search) }}">{{ p }}</a>
+        <a class="page-link" href="{{ url_for('admin.products', page=p, q=search, category_id=category_id, status=status or None, per_page=per_page) }}">{{ p }}</a>
       </li>
       {% else %}
       <li class="page-item disabled"><span class="page-link">…</span></li>
       {% endif %}
     {% endfor %}
     {% if pagination.has_next %}
-    <li class="page-item"><a class="page-link" href="{{ url_for('admin.products', page=pagination.next_num, q=search) }}"><i class="bi bi-chevron-right"></i></a></li>
+    <li class="page-item"><a class="page-link" href="{{ url_for('admin.products', page=pagination.next_num, q=search, category_id=category_id, status=status or None, per_page=per_page) }}"><i class="bi bi-chevron-right"></i></a></li>
     {% endif %}
   </ul>
 </nav>
@@ -213,7 +235,35 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script>
+// Drag and drop: save the new order of the rows on this page.
+const rows = document.getElementById('productRows');
+if (window.Sortable && rows.querySelector('tr[data-id]')) {
+  const saved = document.getElementById('reorderSaved');
+  Sortable.create(rows, {
+    handle: '.drag-handle', animation: 150, ghostClass: 'table-active',
+    onEnd: async (evt) => {
+      if (evt.oldIndex === evt.newIndex) return;
+      const ids = Array.from(rows.querySelectorAll('tr[data-id]')).map(r => Number(r.dataset.id));
+      saved.classList.add('d-none');
+      try {
+        const resp = await fetch('{{ url_for('admin.reorder_products') }}', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+          body: JSON.stringify({ids})
+        });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.message);
+        saved.classList.remove('d-none');
+      } catch (e) {
+        alert('Could not save the new order. The page will reload.');
+        location.reload();
+      }
+    }
+  });
+}
+
 document.querySelectorAll('.product-toggle').forEach(toggle => {
   toggle.addEventListener('change', async function() {
     const id = this.dataset.productId;

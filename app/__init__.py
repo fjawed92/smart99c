@@ -130,6 +130,9 @@ def create_app(config_name='default'):
 
     from app.store import STORE
 
+    from app.services.storefront import shop_filters
+    app.jinja_env.globals['shop_filters'] = shop_filters
+
     @app.context_processor
     def inject_globals():
         cart_count = get_cart_count()
@@ -146,7 +149,6 @@ def create_app(config_name='default'):
         def setting(key, default=''):
             return get_site_setting(key, default) if db_ok else default
 
-        announcement = setting('announcement', '')
 
         # Admin → Settings can override hours and the free-delivery amount.
         store = dict(STORE)
@@ -183,6 +185,19 @@ def create_app(config_name='default'):
         cash_banner = ''
         if cash_pct and setting('cash_discount_banner_active', '1') == '1':
             cash_banner = f'Pay cash at pickup & save {cash_pct.normalize():f}%'
+        # Scrolling banner: the owner's messages (Admin → Banner & Filters),
+        # then the automatic ones for running sales, cash and free delivery.
+        ticker_items = []
+        if db_ok:
+            try:
+                from app.services.storefront import ticker_messages
+                ticker_items = [m['text'] for m in ticker_messages() if m['active']]
+            except SQLAlchemyError:
+                db.session.rollback()
+        ticker_items += sale_banners + [cash_banner]
+        if store['free_delivery_over'] and setting('ticker_free_delivery_active', '1') == '1':
+            ticker_items.append(f"Free local delivery over ${store['free_delivery_over']}")
+        ticker_items = [t for t in ticker_items if t]
         ga_id = setting('ga_measurement_id', '').strip().upper()
         if not re.fullmatch(r'G-[A-Z0-9]{4,15}', ga_id):
             ga_id = ''
@@ -202,9 +217,7 @@ def create_app(config_name='default'):
         }
         return dict(
             cart_count=cart_count,
-            announcement=announcement,
-            sale_banners=sale_banners,
-            cash_banner=cash_banner,
+            ticker_items=ticker_items,
             cash_discount_pct=cash_pct,
             nav_categories=categories,
             footer_social=footer_social,

@@ -21,6 +21,7 @@
       <span class="lbl text-muted">{{ pagination.total }} product{{ '' if pagination.total == 1 else 's' }}</span>
       <label class="visually-hidden" for="sortSelect">Sort by</label>
       <select class="form-select" id="sortSelect">
+        <option value="featured" {% if sort == 'featured' %}selected{% endif %}>Our picks</option>
         <option value="newest" {% if sort == 'newest' %}selected{% endif %}>Newest</option>
         <option value="price_asc" {% if sort == 'price_asc' %}selected{% endif %}>Price: low to high</option>
         <option value="price_desc" {% if sort == 'price_desc' %}selected{% endif %}>Price: high to low</option>
@@ -29,7 +30,7 @@
     </div>
   </div>
 
-  {% with pc_endpoint=request.endpoint, pc_args=dict(cat_args, q=search or None, sort=sort if sort != 'newest' else None), pc_active=max_price, pc_deals=deals %}
+  {% with pc_endpoint=request.endpoint, pc_args=dict(cat_args, q=search or None, sort=sort if sort != 'featured' else None), pc_min=min_price, pc_max=max_price, pc_deals=deals %}
   <div class="shop-pricebar">{% include '_price_chips.html' %}</div>
   {% endwith %}
 

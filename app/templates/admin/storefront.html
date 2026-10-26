@@ -1,0 +1,182 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}Banner & Filters{% endblock %}
+{% block page_title %}Banner &amp; Filters{% endblock %}
+
+{% block extra_head %}
+<style>
+  .sf-row { display: flex; gap: .5rem; align-items: center; padding: .5rem; border: 1px solid var(--bs-border-color); border-radius: 8px; background: #fff; margin-bottom: .5rem; }
+  .sf-row.is-off { opacity: .55; }
+  .sf-handle { cursor: grab; color: var(--bs-secondary-color); font-size: 1.25rem; padding: 0 .25rem; touch-action: none; }
+  .sf-ghost { opacity: .35; }
+  .sf-grid { display: grid; gap: .5rem; flex: 1; grid-template-columns: 8rem 1fr 1fr 6rem 6rem; align-items: center; }
+  @media (max-width: 767px) { .sf-grid { grid-template-columns: 1fr 1fr; } .sf-grid .sf-kind { grid-column: 1 / -1; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-xl-9">
+
+    <form method="POST" class="card border-0 shadow-sm mb-4" id="ticker">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <input type="hidden" name="part" value="ticker" />
+      <div class="card-header bg-white border-0 pt-3">
+        <h6 class="fw-700 mb-1">Scrolling banner</h6>
+        <p class="small text-muted mb-0">The moving strip at the top of every page. Drag <i class="bi bi-grip-vertical"></i> to change the order, switch a message off to hide it for now, or <i class="bi bi-trash"></i> to delete it.</p>
+      </div>
+      <div class="card-body">
+        <div id="tickerList">
+          {% for m in messages %}
+          <div class="sf-row{% if not m.active %} is-off{% endif %}">
+            <span class="sf-handle" aria-hidden="true"><i class="bi bi-grip-vertical"></i></span>
+            <input type="text" name="text" class="form-control" value="{{ m.text }}" maxlength="160" aria-label="Message" />
+            <input type="hidden" name="active" value="{{ '1' if m.active else '' }}" />
+            <div class="form-check form-switch mb-0" title="Show on the site">
+              <input class="form-check-input sf-show" type="checkbox" role="switch" aria-label="Show this message" {% if m.active %}checked{% endif %}>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-icon sf-del" aria-label="Delete message"><i class="bi bi-trash"></i></button>
+          </div>
+          {% endfor %}
+        </div>
+        <button type="button" class="btn btn-outline-primary btn-sm" id="addMessage"><i class="bi bi-plus-lg me-1"></i>Add a message</button>
+
+        <hr />
+        <p class="small fw-700 mb-2">Automatic messages <span class="fw-normal text-muted">(added after yours, and change on their own)</span></p>
+        <div class="form-check form-switch mb-2">
+          <input class="form-check-input" type="checkbox" id="ticker_free_delivery_active" name="ticker_free_delivery_active" {% if free_delivery_on %}checked{% endif %}>
+          <label class="form-check-label" for="ticker_free_delivery_active">"Free local delivery over $…" <span class="text-muted small">(amount from <a href="{{ url_for('admin.shipping') }}">Shipping</a>)</span></label>
+        </div>
+        <p class="small text-muted mb-0">Running sales and the pay-cash discount announce themselves too. Turn those on or off in <a href="{{ url_for('admin.discounts') }}">Discounts</a>.</p>
+      </div>
+      <div class="card-footer bg-white border-0 pb-3 d-flex justify-content-between flex-wrap gap-2">
+        <button type="submit" form="reset_ticker" class="btn btn-link btn-sm text-muted px-0"
+                onclick="return confirm('Throw away your messages and put back the starter list?')">Start over with the starter list</button>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-2"></i>Save banner</button>
+      </div>
+    </form>
+
+    <form method="POST" class="card border-0 shadow-sm mb-4" id="filters">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <input type="hidden" name="part" value="filters" />
+      <div class="card-header bg-white border-0 pt-3">
+        <h6 class="fw-700 mb-1">"Shop by price" buttons</h6>
+        <p class="small text-muted mb-0">The quick buttons on the home page and the Shop page. A price button shows everything between "From" and "Up to"; leave one blank for no limit. The big text is bold, the small text follows it (e.g. <b>99¢</b> &amp; under).</p>
+      </div>
+      <div class="card-body">
+        <div id="filterList">
+          {% for f in filters %}
+          <div class="sf-row{% if not f.active %} is-off{% endif %}">
+            <span class="sf-handle" aria-hidden="true"><i class="bi bi-grip-vertical"></i></span>
+            <div class="sf-grid">
+              <select name="kind" class="form-select sf-kind" aria-label="Button type">
+                <option value="price" {% if f.kind == 'price' %}selected{% endif %}>Price</option>
+                <option value="sale" {% if f.kind == 'sale' %}selected{% endif %}>On sale</option>
+              </select>
+              <input type="text" name="label" class="form-control" value="{{ f.label }}" maxlength="40" placeholder="Big text, e.g. 99¢" aria-label="Big text" />
+              <input type="text" name="note" class="form-control" value="{{ f.note }}" maxlength="40" placeholder="Small text, e.g. & under" aria-label="Small text" />
+              <input type="text" inputmode="decimal" name="min" class="form-control sf-price" value="{{ f.min or '' }}" placeholder="From $" aria-label="From price" />
+              <input type="text" inputmode="decimal" name="max" class="form-control sf-price" value="{{ f.max or '' }}" placeholder="Up to $" aria-label="Up to price" />
+            </div>
+            <input type="hidden" name="active" value="{{ '1' if f.active else '' }}" />
+            <div class="form-check form-switch mb-0" title="Show on the site">
+              <input class="form-check-input sf-show" type="checkbox" role="switch" aria-label="Show this button" {% if f.active %}checked{% endif %}>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-icon sf-del" aria-label="Delete button"><i class="bi bi-trash"></i></button>
+          </div>
+          {% endfor %}
+        </div>
+        <button type="button" class="btn btn-outline-primary btn-sm" id="addFilter"><i class="bi bi-plus-lg me-1"></i>Add a button</button>
+      </div>
+      <div class="card-footer bg-white border-0 pb-3 d-flex justify-content-between flex-wrap gap-2">
+        <button type="submit" form="reset_filters" class="btn btn-link btn-sm text-muted px-0"
+                onclick="return confirm('Throw away your buttons and put back 99¢ / $1.99 / $4.99 / $9.99 / On sale?')">Start over with the starter buttons</button>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-2"></i>Save buttons</button>
+      </div>
+    </form>
+
+  </div>
+</div>
+
+{% for k in ('ticker', 'filters') %}
+<form method="POST" id="reset_{{ k }}" class="d-none">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+  <input type="hidden" name="part" value="reset_{{ k }}" />
+</form>
+{% endfor %}
+
+<template id="messageTpl">
+  <div class="sf-row">
+    <span class="sf-handle" aria-hidden="true"><i class="bi bi-grip-vertical"></i></span>
+    <input type="text" name="text" class="form-control" maxlength="160" placeholder="e.g. Eid Mubarak! Balloons & gifts in store now" aria-label="Message" />
+    <input type="hidden" name="active" value="1" />
+    <div class="form-check form-switch mb-0" title="Show on the site">
+      <input class="form-check-input sf-show" type="checkbox" role="switch" aria-label="Show this message" checked>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-danger btn-icon sf-del" aria-label="Delete message"><i class="bi bi-trash"></i></button>
+  </div>
+</template>
+
+<template id="filterTpl">
+  <div class="sf-row">
+    <span class="sf-handle" aria-hidden="true"><i class="bi bi-grip-vertical"></i></span>
+    <div class="sf-grid">
+      <select name="kind" class="form-select sf-kind" aria-label="Button type">
+        <option value="price" selected>Price</option>
+        <option value="sale">On sale</option>
+      </select>
+      <input type="text" name="label" class="form-control" maxlength="40" placeholder="Big text, e.g. $2.99" aria-label="Big text" />
+      <input type="text" name="note" class="form-control" maxlength="40" value="&amp; under" placeholder="Small text, e.g. & under" aria-label="Small text" />
+      <input type="text" inputmode="decimal" name="min" class="form-control sf-price" placeholder="From $" aria-label="From price" />
+      <input type="text" inputmode="decimal" name="max" class="form-control sf-price" placeholder="Up to $" aria-label="Up to price" />
+    </div>
+    <input type="hidden" name="active" value="1" />
+    <div class="form-check form-switch mb-0" title="Show on the site">
+      <input class="form-check-input sf-show" type="checkbox" role="switch" aria-label="Show this button" checked>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-danger btn-icon sf-del" aria-label="Delete button"><i class="bi bi-trash"></i></button>
+  </div>
+</template>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<script>
+function wireRow(row) {
+  const show = row.querySelector('.sf-show');
+  const flag = row.querySelector('input[name="active"]');
+  show.addEventListener('change', () => {
+    flag.value = show.checked ? '1' : '';
+    row.classList.toggle('is-off', !show.checked);
+  });
+  row.querySelector('.sf-del').addEventListener('click', () => row.remove());
+  const kind = row.querySelector('.sf-kind');
+  if (kind) {
+    const prices = row.querySelectorAll('.sf-price');
+    const sync = () => prices.forEach(p => { p.disabled = kind.value === 'sale'; });
+    kind.addEventListener('change', sync);
+    sync();
+  }
+}
+
+function setUp(listId, tplId, addId) {
+  const list = document.getElementById(listId);
+  list.querySelectorAll('.sf-row').forEach(wireRow);
+  if (window.Sortable) Sortable.create(list, { handle: '.sf-handle', animation: 150, ghostClass: 'sf-ghost' });
+  document.getElementById(addId).addEventListener('click', () => {
+    const row = document.getElementById(tplId).content.firstElementChild.cloneNode(true);
+    list.appendChild(row);
+    wireRow(row);
+    row.querySelector('input[type="text"]').focus();
+  });
+}
+
+setUp('tickerList', 'messageTpl', 'addMessage');
+setUp('filterList', 'filterTpl', 'addFilter');
+
+// Disabled price boxes aren't sent, which would shift the From/Up to lists.
+// Re-enable them (empty) just before the form goes.
+document.getElementById('filters').addEventListener('submit', function () {
+  this.querySelectorAll('.sf-price:disabled').forEach(p => { p.value = ''; p.disabled = false; });
+});
+</script>
+{% endblock %}
