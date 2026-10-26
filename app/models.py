@@ -275,6 +275,9 @@ class Order(db.Model):
     pickup_deadline = db.Column(db.DateTime)   # cash pickups only (UTC)
     ready_at = db.Column(db.DateTime)
     picked_up_at = db.Column(db.DateTime)
+    # Cash orders: when the store's register took the money (IZY Ops says so).
+    # Picked up also means paid; this covers paid-but-not-handed-over-yet.
+    cash_paid_at = db.Column(db.DateTime)
     shipped_at = db.Column(db.DateTime)
     delivered_at = db.Column(db.DateTime)
     cancelled_at = db.Column(db.DateTime)
@@ -323,6 +326,7 @@ class Order(db.Model):
         steps = [(placed, self.created_at, 'primary')]
         labels = [('ready_at', 'Packed · ready for pickup', 'primary'),
                   ('reminder_sent_at', 'Pickup reminder emailed', 'muted'),
+                  ('cash_paid_at', 'Paid at register', 'success'),
                   ('picked_up_at', 'Picked up' + (' · cash paid' if self.is_cash else ''), 'success'),
                   ('shipped_at', 'Shipped / out for delivery', 'primary'),
                   ('delivered_at', 'Delivered', 'success'),
@@ -339,6 +343,11 @@ class Order(db.Model):
     @property
     def is_cash(self):
         return self.payment_method == 'cash'
+
+    @property
+    def cash_paid(self):
+        """A cash order the customer has paid for at the register."""
+        return self.is_cash and (self.cash_paid_at is not None or self.status in ('picked_up', 'delivered'))
 
     @property
     def discount_total(self):

@@ -179,6 +179,6 @@ def test_admin_pages_render(admin_client, db, simple_product):
     late_tab = admin_client.get('/admin/orders?tab=late').get_data(as_text=True)
     assert late.order_number in late_tab and 'Overdue by' in late_tab
     detail = admin_client.get(f'/admin/orders/{late.id}').get_data(as_text=True)
-    assert 'STORE PICKUP · PAY CASH' in detail and 'No-show · put items back on shelf' in detail
+    assert 'STORE PICKUP · PAY AT REGISTER' in detail and 'No-show · put items back on shelf' in detail
     settings = admin_client.get('/admin/settings').get_data(as_text=True)
     assert 'Pay Cash at Pickup' in settings

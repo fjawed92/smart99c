@@ -202,6 +202,46 @@ def test_delivery_completes_as_delivered_and_cash_shows_paid(api, db):
     assert db.session.get(Order, order.id).status == 'delivered' and data['pay_status'] == 'paid_instore'
 
 
+def test_paid_at_register_shows_as_paid_everywhere(api, db, admin_client):
+    order = _order(db, payment='cash', pickup_deadline=datetime.utcnow() + timedelta(hours=24))
+    url = f'/api/izyops/orders/{order.id}'
+    data = api.client.patch(url, json={'pay_status': 'paid_instore', 'actor': 'IzyOps (register A)'},
+                            headers=api.auth).get_json()['data']
+    order = db.session.get(Order, order.id)
+    assert data['pay_status'] == 'paid_instore' and order.status == 'processing'
+    assert order.cash_paid_at is not None and order.cash_paid and 'paid at register' in order.notes
+    assert any(label == 'Paid at register' for label, _t, _tone in order.timeline)
+    page = admin_client.get(f'/admin/orders/{order.id}').get_data(as_text=True)
+    assert 'PAID AT REGISTER' in page
+    # Said again: recorded once.
+    api.client.patch(url, json={'pay_status': 'paid_instore'}, headers=api.auth)
+    assert db.session.get(Order, order.id).notes.count('paid at register') == 1
+
+
+def test_a_paid_hold_is_never_released(api, db, simple_product):
+    from app.helpers import set_site_setting
+    from app.services import pickup
+
+    set_site_setting('cash_expire_action', 'auto')
+    order = _order(db, payment='cash', product=simple_product, pickup_deadline=datetime.utcnow() - timedelta(hours=2))
+    api.client.patch(f'/api/izyops/orders/{order.id}', json={'pay_status': 'paid_instore'}, headers=api.auth)
+    pickup.process_holds()
+    assert db.session.get(Order, order.id).status == 'processing'
+
+
+def test_only_paid_at_register_can_be_sent(api, db):
+    order = _order(db, payment='cash')
+    resp = api.client.patch(f'/api/izyops/orders/{order.id}', json={'pay_status': 'paid_online'}, headers=api.auth)
+    assert resp.status_code == 400 and db.session.get(Order, order.id).cash_paid_at is None
+
+
+def test_a_card_order_is_not_changed_by_paid_at_register(api, db):
+    order = _order(db)
+    data = api.client.patch(f'/api/izyops/orders/{order.id}', json={'pay_status': 'paid_instore'},
+                            headers=api.auth).get_json()['data']
+    assert data['pay_status'] == 'paid_online' and db.session.get(Order, order.id).cash_paid_at is None
+
+
 def test_canceling_puts_the_stock_back_once(api, db, simple_product):
     order = _order(db, product=simple_product)
     simple_product.stock_quantity = 5

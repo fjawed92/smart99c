@@ -19,7 +19,7 @@
         <div class="order-number-badge">
           Order # <strong>{{ order.order_number }}</strong>
         </div>
-        {% if order.is_cash %}<p class="text-muted small mt-2 mb-0">Show this number at the counter.</p>{% endif %}
+        {% if order.is_cash %}<p class="text-muted small mt-2 mb-0">Show this number at the register and pay there when you pick up.</p>{% endif %}
       </div>
 
       {% if order.is_cash %}
@@ -109,7 +109,7 @@
               {% endif %}
               <hr class="my-2" />
               <div class="d-flex justify-content-between">
-                <strong>{% if order.is_cash %}Pay at pickup{% else %}Total{% endif %}</strong>
+                <strong>{% if order.is_cash %}Pay at the register at pickup{% else %}Total{% endif %}</strong>
                 <strong class="text-primary">${{ "%.2f"|format(order.total) }}</strong>
               </div>
             </div>
