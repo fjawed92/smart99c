@@ -51,6 +51,7 @@ EXTRA_COLUMNS = [
     ('orders', 'cancelled_at', 'TIMESTAMP'),
     ('orders', 'no_show_at', 'TIMESTAMP'),
     ('orders', 'refunded_at', 'TIMESTAMP'),
+    ('orders', 'amount_refunded', 'NUMERIC(10, 2) NOT NULL DEFAULT 0'),
 ]
 
 

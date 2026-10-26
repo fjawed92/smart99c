@@ -9,7 +9,12 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 
 from app.models import Category, Product
+from app.services.product_images import own_image_urls
 from app.services.product_import import COLUMNS
+
+# The full download adds the barcode and photo links, so it doubles as a
+# backup: uploading it under Bulk Import puts everything back.
+EXPORT_COLUMNS = COLUMNS + ['upc', 'image_urls']
 
 
 def _decimal_to_value(d):
@@ -46,14 +51,16 @@ def _row_for_product(product, variant=None):
         _decimal_to_value(variant.price_override) if variant else None,
         _decimal_to_value(variant.cost_price) if variant else None,
         variant.stock_quantity if variant else None,
+        product.upc,
+        '\n'.join(own_image_urls(product)) or None,
     ]
 
 
-def _style_header(ws):
+def _style_header(ws, columns=COLUMNS):
     header_font = Font(bold=True, color='FFFFFF')
     header_fill = PatternFill('solid', fgColor='E8334A')
     align = Alignment(horizontal='left', vertical='center')
-    for col_idx, col_name in enumerate(COLUMNS, start=1):
+    for col_idx, col_name in enumerate(columns, start=1):
         cell = ws.cell(row=1, column=col_idx, value=col_name)
         cell.font = header_font
         cell.fill = header_fill
@@ -67,9 +74,9 @@ def _style_header(ws):
         'track_inventory': 14, 'stock_quantity': 13,
         'color_name': 14, 'color_hex': 11, 'variant_sku': 16,
         'variant_price_override': 18, 'variant_cost_price': 16,
-        'variant_stock_quantity': 18,
+        'variant_stock_quantity': 18, 'upc': 16, 'image_urls': 50,
     }
-    for col_idx, name in enumerate(COLUMNS, start=1):
+    for col_idx, name in enumerate(columns, start=1):
         ws.column_dimensions[ws.cell(row=1, column=col_idx).column_letter].width = widths.get(name, 14)
 
 
@@ -116,7 +123,7 @@ def build_catalog_workbook():
     wb = Workbook()
     ws = wb.active
     ws.title = 'Products'
-    _style_header(ws)
+    _style_header(ws, EXPORT_COLUMNS)
 
     products = (Product.query
                 .order_by(Product.name)
@@ -129,6 +136,43 @@ def build_catalog_workbook():
             ws.append(_row_for_product(p, None))
 
     _append_category_sheet(wb)
+    return wb
+
+
+def _backup_rows(data):
+    """Export rows for one product as a backup saved it (JSON from
+    app/services/backups.py), in the same columns as the full download."""
+    def money(v):
+        return float(v) if v not in (None, '') else None
+
+    def flag(v):
+        return None if v is None else ('TRUE' if v else 'FALSE')
+
+    base = [data.get('slug'), data.get('name'), data.get('category'), data.get('short_description'),
+            data.get('description'), money(data.get('price')), money(data.get('compare_price')),
+            money(data.get('cost_price')), data.get('sku'), None, flag(data.get('is_active')),
+            flag(data.get('is_featured')), None]
+    tail = [data.get('upc'), '\n'.join(data.get('images') or []) or None]
+    variants = data.get('variants') or []
+    if not variants:
+        return [base + [data.get('stock_quantity'), None, None, None, None, None, None] + tail]
+    return [base + [None, v.get('color_name'), v.get('color_hex'), v.get('sku'), money(v.get('price_override')),
+                    money(v.get('cost_price')), v.get('stock_quantity')] + tail for v in variants]
+
+
+def build_backup_workbook(backups):
+    """A downloadable copy of saved backups, re-uploadable under Bulk Import."""
+    from app.services.backups import data_of
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Products'
+    _style_header(ws, EXPORT_COLUMNS)
+    for backup in backups:
+        data = data_of(backup)
+        if data:
+            for row in _backup_rows(data):
+                ws.append(row)
     return wb
 
 

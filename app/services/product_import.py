@@ -31,6 +31,7 @@ from openpyxl import load_workbook
 from app.extensions import db
 from app.models import Category, Product, ProductVariant
 from app.helpers import generate_slug
+from app.services.product_images import set_product_images, split_urls
 
 
 COLUMNS = [
@@ -42,7 +43,9 @@ COLUMNS = [
 ]
 
 # Optional columns understood by the importer but not required in the template.
-OPTIONAL_COLUMNS = ['upc']
+# image_urls: photo links (one per line, main photo first) — what the backup
+# download writes, so re-uploading that file brings the photos back.
+OPTIONAL_COLUMNS = ['upc', 'image_urls']
 ALL_COLUMNS = COLUMNS + OPTIONAL_COLUMNS
 
 # Friendly header → template column
@@ -56,6 +59,7 @@ ALIASES = {
     'cost': 'cost_price', 'unit cost': 'cost_price', 'cost price': 'cost_price',
     'sku': 'product_sku', 'item code': 'product_sku', 'item #': 'product_sku',
     'upc': 'upc', 'barcode': 'upc', 'upc code': 'upc',
+    'photos': 'image_urls', 'images': 'image_urls', 'image urls': 'image_urls', 'photo links': 'image_urls',
     'stock': 'stock_quantity', 'qty': 'stock_quantity', 'quantity': 'stock_quantity', 'on hand': 'stock_quantity',
     'short description': 'short_description', 'summary': 'short_description',
     'long description': 'description',
@@ -344,6 +348,9 @@ def apply_rows(rows):
             upc = _as_str(cell(row, 'upc'))
             if upc is not None:
                 product.upc = upc
+            image_urls = split_urls(cell(row, 'image_urls'))
+            if image_urls:
+                set_product_images(product, image_urls)
             weight = _as_decimal(cell(row, 'weight'))
             if weight is not None:
                 product.weight = weight

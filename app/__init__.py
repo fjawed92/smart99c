@@ -48,6 +48,34 @@ def create_app(config_name='default'):
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp, url_prefix='/admin')
 
+    # IZY Ops (the store's back office) manages products, stock and orders
+    # through /api/izyops. It and Stripe sign their own requests, so neither
+    # carries a CSRF token: without the exemption every Stripe webhook was
+    # refused with a 400 and paid card orders could stay "pending".
+    from app.routes.izyops_api import izyops_api_bp
+    from app.routes.checkout import stripe_webhook
+    app.register_blueprint(izyops_api_bp)
+    csrf.exempt(izyops_api_bp)
+    csrf.exempt(stripe_webhook)
+
+    from app.services import izyops_notify
+    izyops_notify.install()
+
+    # When IZY Ops manages the products (IZY Ops → Websites → Catalog, or
+    # IZYOPS_OWNS_CATALOG=1), the admin's product forms stop saving; orders,
+    # stock counts from IZY Ops and everything else keep working.
+    from app.routes.admin import CATALOG_ENDPOINTS
+    from app.services import izyops_mode, product_touch
+    product_touch.install()
+
+    @app.before_request
+    def catalog_lock():
+        from flask import flash, redirect, request as req, url_for
+        if req.method == 'POST' and req.endpoint in CATALOG_ENDPOINTS and izyops_mode.locked():
+            flash('Products are managed in IZY Ops — change them there and this site follows within a minute.',
+                  'warning')
+            return redirect(url_for('admin.products'))
+
     # Visitor analytics (Admin → Visitors)
     from app.services.visits import record_page_view
     app.after_request(record_page_view)

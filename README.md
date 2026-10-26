@@ -94,6 +94,49 @@ Set these in Render → Environment (then the site restarts):
 This uses IzyOps' `/api/v2/products` and `/api/v2/catalog/facets`, read-only.
 Costs are shown in the admin screen only, never to shoppers.
 
+### Letting IZY Ops manage the website
+
+IZY Ops can run this site the way it runs family99c: it sends product details,
+prices and stock here, and brings every order back to its Website Orders board
+and the registers' 🛒 Website Orders button. The site offers the same
+`/api/izyops` connection family99c does.
+
+1. In Render → Environment, set a login for IZY Ops (any username, a long
+   random password):
+
+   | Variable | Example |
+   |----------|---------|
+   | `IZYOPS_API_USERNAME` | `izyops` |
+   | `IZYOPS_API_PASSWORD` | a long random password |
+
+2. In IZY Ops: Settings → Websites → Add a website → Smart 99c. Use
+   `https://<this site>/api/izyops` and the login above, then Test connection
+   and Import products from website.
+3. Optional, for instant order updates: in that card press Create website key
+   and copy the two lines it shows into Render → Environment:
+   `IZYOPS_NOTIFY_URL` and `IZYOPS_NOTIFY_KEY`.
+4. Choose who manages the products in IZY Ops → Settings → Websites →
+   Catalog: **IZY Ops only** (the admin's product pages here become
+   view-only), **Website only** (IZY Ops sends stock only), or **Both** (edit
+   in either place; the latest change wins, and a price changed here becomes
+   the product's website price in IZY Ops). Change it any time.
+   `IZYOPS_OWNS_CATALOG=1` on Render forces "IZY Ops only" whatever IZY Ops says.
+
+**Nothing on the website is lost.** Before connecting, download everything
+from Admin → Products → **Download all products (backup)**: every product,
+colour, barcode and photo link, in a file you can upload again under Bulk
+Import to put it all back. The site also keeps its own copies under
+Admin → Products → **Backups**:
+- a copy of every product the first time IZY Ops connects (kept for good);
+- a copy of a product before each IZY Ops change (kept 180 days), each with
+  a Restore button.
+Photos IZY Ops replaces are never deleted from Cloudinary.
+
+Every product and colour gets a permanent item number (`SC99-00042`,
+`SC99-00042-V7`) the first time IZY Ops reads the catalog; numbers already set
+are kept. Cash-at-pickup orders show on the register as "Cash due", and the
+cashier collects them there.
+
 ## Discounts & delivery options
 
 Admin → **Discounts**:

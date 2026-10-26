@@ -281,6 +281,8 @@ class Order(db.Model):
     no_show_at = db.Column(db.DateTime)
     refunded_at = db.Column(db.DateTime)
     reminder_sent_at = db.Column(db.DateTime)
+    # Given back to the card so far (refunds from IZY Ops, partial or full).
+    amount_refunded = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -593,3 +595,22 @@ class SiteVisit(db.Model):
     order_total = db.Column(db.Numeric(10, 2))
 
     product = db.relationship('Product')
+
+
+class ProductBackup(db.Model):
+    """A copy of a product as it was, saved before IZY Ops changed it (and a
+    full copy of every product the first time IZY Ops connected), so nothing
+    on the website is ever lost. ``data`` is JSON (app/services/backups.py)."""
+    __tablename__ = 'product_backups'
+
+    id = db.Column(db.Integer, primary_key=True)
+    product_id = db.Column(db.Integer, index=True)   # no FK: a backup outlives its product
+    sku = db.Column(db.String(100))
+    name = db.Column(db.String(255))
+    reason = db.Column(db.String(120), nullable=False)
+    batch = db.Column(db.String(40), index=True)     # set on the rows of one full backup
+    data = db.Column(db.Text, nullable=False)
+    taken_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    def __repr__(self):
+        return f'<ProductBackup {self.product_id} {self.reason}>'

@@ -3,9 +3,30 @@
 {% block page_title %}Products{% endblock %}
 
 {% block content %}
+{% if catalog_mode == 'izyops' %}
+<div class="alert alert-info d-flex gap-2 align-items-start">
+  <i class="bi bi-lock"></i>
+  <div><strong>Products are managed in IZY Ops.</strong>
+    Change names, prices and photos there (Products → Photos &amp; details → Websites) — this site follows within a minute.
+    The pages here are view-only. To edit here too, choose "Both" in IZY Ops → Settings → Websites → Catalog.</div>
+</div>
+{% elif catalog_mode == 'both' and izyops_connected %}
+<div class="alert alert-light border d-flex gap-2 align-items-start">
+  <i class="bi bi-arrow-left-right"></i>
+  <div><strong>Edit here or in IZY Ops.</strong> Both count, and the latest change wins.
+    A price changed here becomes the product's website price in IZY Ops; the register keeps the store price.
+    Stock always comes from IZY Ops.</div>
+</div>
+{% endif %}
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
   <p class="text-muted mb-0">{{ pagination.total }} products</p>
   <div class="d-flex gap-2 flex-wrap">
+    <a href="{{ url_for('admin.products_export') }}" class="btn btn-outline-secondary" title="Every product, colour and photo link in one Excel file — upload it under Bulk Import to restore">
+      <i class="bi bi-download me-2"></i>Download all products (backup)
+    </a>
+    <a href="{{ url_for('admin.product_backups') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-clock-history me-2"></i>Backups
+    </a>
     <a href="{{ url_for('admin.products_import') }}" class="btn btn-outline-primary">
       <i class="bi bi-file-earmark-spreadsheet me-2"></i>Bulk Import
     </a>
