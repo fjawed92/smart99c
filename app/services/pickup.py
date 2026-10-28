@@ -137,6 +137,9 @@ def _email_body(order, kind):
     total = f'${order.total:.2f}'
     name = order.shipping_address.first_name if order.shipping_address else 'there'
     lines = {
+        'placed': ('Thanks for your order',
+                   f'Thanks, {name}! We got order {order.order_number} ({total}). '
+                   'We\'re getting it ready and will email you again when it\'s ready.'),
         'reserved': ('Your order is reserved',
                      f'Thanks, {name}! Order {order.order_number} is reserved. We\'ll email you when it\'s ready. '
                      f'Bring {total} cash and pick up by {deadline}.'),
@@ -170,6 +173,14 @@ def _email_html(order, kind, subject, name, total, deadline, link):
     pay = [('Pay at pickup', f'{total} cash', False)] if cash else [('Paid by card', total, False)]
     more_time = f'Need more time? Call us at {STORE["phone"]} and we\'ll hold it.'
     views = {
+        'placed': dict(
+            pill_label='Order received', pill_tone='ok',
+            title=f'Thanks, {name}! We got your order.',
+            lead='We\'re getting it ready now and will email you again as soon as it\'s ready.',
+            fact_rows=[number] + pay + ([('Delivery', order.shipping_method, False)]
+                                        if order.shipping_method else []),
+            preheader=f'Order {order.order_number} · {total}.',
+            footer_note=f'Questions? Call us at {STORE["phone"]}.'),
         'reserved': dict(
             pill_label='Reserved', pill_tone='info',
             title=f'Thanks, {name}! Your order is reserved.',
@@ -219,7 +230,7 @@ def _email_html(order, kind, subject, name, total, deadline, link):
     rows.append(('Tax', f'${order.tax:.2f}'))
     if order.service_fee and order.service_fee > 0:
         rows.append(('Online service fee', f'${order.service_fee:.2f}'))
-    if kind == 'released':
+    if kind == 'released' or order.status == 'pending':
         total_label = 'Order total'
     else:
         total_label = 'Pay in cash at pickup' if cash else 'Paid'
@@ -251,6 +262,87 @@ def email_customer(order, kind):
     except Exception:
         current_app.logger.exception('Could not send %s email for %s', kind, order.order_number)
         return False
+
+
+def order_alert_recipients():
+    """Addresses that get a copy of every new order (Admin → Email)."""
+    from app.helpers import get_site_setting
+    from app.services.mailer import get_mail_config
+    if get_site_setting('order_alert_enabled', '1') != '1':
+        return []
+    raw = get_site_setting('order_alert_emails') or get_mail_config()['from_email']
+    return [e.strip() for e in raw.replace(';', ',').split(',') if e.strip()]
+
+
+def _owner_email(order):
+    from app.services.mailer import render_email
+    addr = order.shipping_address
+    name = f'{addr.first_name} {addr.last_name}'.strip() if addr else ''
+    total = f'${order.total:.2f}'
+    paid = 'Cash at pickup' if order.is_cash else (
+        'Card · payment processing' if order.status == 'pending' else 'Card · paid')
+    count = sum(i.quantity for i in order.items)
+    subject = f'New order {order.order_number} — {total} ({paid.split(" ·")[0].lower()})'
+    facts = [('Order', order.order_number, True),
+             ('Customer', name or '—', False),
+             ('Phone', (addr.phone if addr else '') or '—', False),
+             ('Email', (addr.email if addr else '') or '—', False),
+             ('Payment', paid, False),
+             ('Delivery', order.shipping_method or '—', False)]
+    if order.pickup_deadline:
+        facts.append(('Pick up by', format_local(order.pickup_deadline), False))
+    if addr and addr.address_line1:
+        facts.append(('Ship to', ', '.join(p for p in (addr.address_line1, addr.address_line2,
+                                                        addr.city, addr.state, addr.zip_code) if p),
+                      False))
+    if order.notes:
+        facts.append(('Note', order.notes, False))
+    try:
+        link = url_for('admin.order_detail', order_id=order.id, _external=True)
+    except RuntimeError:
+        link = ''
+    rows = [('Subtotal', f'${order.subtotal:.2f}')]
+    if order.promo_discount and order.promo_discount > 0:
+        rows.append((f'Promo {order.promo_code or ""}'.strip(), f'−${order.promo_discount:.2f}'))
+    if order.cash_discount and order.cash_discount > 0:
+        rows.append(('Cash discount', f'−${order.cash_discount:.2f}'))
+    if order.shipping_cost and order.shipping_cost > 0:
+        rows.append(('Delivery', f'${order.shipping_cost:.2f}'))
+    rows.append(('Tax', f'${order.tax:.2f}'))
+    if order.service_fee and order.service_fee > 0:
+        rows.append(('Online service fee', f'${order.service_fee:.2f}'))
+    html = render_email('order.html', subject, order=order,
+                        pill_label='New order', pill_tone='info',
+                        title=f'New order from {name or "a customer"}',
+                        lead=f'{count} item{"s" if count != 1 else ""} · {total}',
+                        fact_rows=facts, button_label='Open in admin', button_url=link,
+                        total_rows=rows, total_label='Total',
+                        preheader=f'{name} · {total} · {paid}', footer_note='',
+                        show_store=False)
+    text = '\n'.join([f'New order {order.order_number}', ''] +
+                      [f'{label}: {value}' for label, value, _ in facts] + [''] +
+                      [f'{i.quantity} x {i.display_name}  ${i.total_price:.2f}' for i in order.items] +
+                      ['', f'Total: {total}', '', link])
+    return subject, html, text
+
+
+def notify_new_order(order):
+    """Best-effort: email the customer their receipt and the store a copy."""
+    from app.services.mailer import send_email, is_mail_configured
+    try:
+        if not is_mail_configured():
+            return
+    except Exception:
+        return
+    email_customer(order, 'reserved' if order.is_cash else 'placed')
+    try:
+        recipients = order_alert_recipients()
+        if recipients:
+            subject, html, text = _owner_email(order)
+            for to in recipients:
+                send_email(to, subject, html, text)
+    except Exception:
+        current_app.logger.exception('Could not send new-order alert for %s', order.order_number)
 
 
 # ─── Reminders and expired holds ─────────────────────────────────────────────

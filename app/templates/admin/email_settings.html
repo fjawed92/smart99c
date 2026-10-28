@@ -94,6 +94,33 @@
 
       <div class="card border-0 shadow-sm mb-4">
         <div class="card-header bg-white border-0 pt-3">
+          <h6 class="fw-700 mb-0">New Order Alerts</h6>
+          <small class="text-muted">Get a copy of every online order by email — customer, items and total.</small>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="order_alert_enabled"
+                       name="order_alert_enabled" {% if settings.order_alert_enabled != '0' %}checked{% endif %}>
+                <label class="form-check-label" for="order_alert_enabled">
+                  Email me when a new order comes in
+                </label>
+              </div>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Send alerts to</label>
+              <input type="text" name="order_alert_emails" class="form-control"
+                     value="{{ settings.order_alert_emails }}"
+                     placeholder="defaults to From Email ({{ settings.mail_from_email or 'not set' }})" />
+              <small class="text-muted">Separate more than one address with commas.</small>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 pt-3">
           <h6 class="fw-700 mb-0">Test Email</h6>
           <small class="text-muted">Saves any changes above, then sends a test email.</small>
         </div>

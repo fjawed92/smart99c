@@ -105,3 +105,70 @@ def test_payment_link_email_renders(app, db, monkeypatch):
         ok, err = admin._send_payment_link_email(link)
     assert ok, err
     assert 'Hi Omar' in sent[0] and 'Pay $25.00' in sent[0] and 'https://pay.example/x' in sent[0]
+
+
+# ─── New-order emails (customer receipt + store alert) ──────────────────────
+
+def _configure_mail(db):
+    set_site_setting('mail_username', 'store@example.com')
+    set_site_setting('mail_password_encrypted', encrypt_secret('app-pass'))
+    db.session.commit()
+
+
+def test_card_order_placed_email(app, db, simple_product):
+    order = _order(db, simple_product, payment='card')
+    with app.test_request_context():
+        subject, html, text = pickup._email_body(order, 'placed')
+    assert subject.startswith('Thanks for your order')
+    assert 'We got your order' in html and 'Paid by card' in html
+    assert 'S99-00418' in text
+
+
+@pytest.mark.parametrize('payment,customer_kind', [('card', 'placed'), ('cash', 'reserved')])
+def test_new_order_emails_customer_and_store(app, db, simple_product, monkeypatch,
+                                             payment, customer_kind):
+    _configure_mail(db)
+    set_site_setting('order_alert_emails', 'owner@example.com, manager@example.com')
+    db.session.commit()
+    order = _order(db, simple_product, payment=payment)
+    sent = []
+    monkeypatch.setattr(mailer, 'send_email',
+                        lambda to, subj, html, text_body=None: sent.append((to, subj, html)))
+    with app.test_request_context():
+        pickup.notify_new_order(order)
+    assert [to for to, _, _ in sent] == ['a@k.com', 'owner@example.com', 'manager@example.com']
+    _, owner_subject, owner_html = sent[1]
+    assert owner_subject.startswith('New order S99-00418 — $8.14')
+    assert 'Aisha K' in owner_html and 'a@k.com' in owner_html
+    assert 'Foil balloon &lt;Happy&gt;' in owner_html
+    assert f'/admin/orders/{order.id}' in owner_html
+
+
+def test_store_alert_defaults_to_from_email_and_can_be_turned_off(app, db):
+    _configure_mail(db)
+    with app.test_request_context():
+        assert pickup.order_alert_recipients() == ['store@example.com']
+        set_site_setting('order_alert_enabled', '0')
+        db.session.commit()
+        assert pickup.order_alert_recipients() == []
+
+
+def test_new_order_skips_quietly_without_mail_setup(app, db, simple_product, monkeypatch):
+    order = _order(db, simple_product, payment='card')
+    sent = []
+    monkeypatch.setattr(mailer, 'send_email', lambda *a, **k: sent.append(a))
+    with app.test_request_context():
+        pickup.notify_new_order(order)
+    assert sent == []
+
+
+def test_admin_saves_order_alert_settings(admin_client, db):
+    from app.helpers import get_site_setting
+    resp = admin_client.post('/admin/email-settings', data={
+        'action': 'save', 'mail_server': 'smtp.gmail.com', 'mail_port': '587',
+        'mail_username': 'store@example.com', 'order_alert_emails': 'me@example.com'})
+    assert resp.status_code == 302
+    assert get_site_setting('order_alert_emails') == 'me@example.com'
+    assert get_site_setting('order_alert_enabled') == '0'  # switch left off
+    page = admin_client.get('/admin/email-settings').get_data(as_text=True)
+    assert 'New Order Alerts' in page and 'me@example.com' in page
