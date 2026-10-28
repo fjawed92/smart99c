@@ -1,0 +1,9 @@
+{% extends 'email/_layout.html' %}
+{% import 'email/_ui.html' as ui with context %}
+{% block content %}
+{{ ui.pill('Payment request', 'info') }}
+{{ ui.heading(greeting_title, 'Here is your secure payment link from ' ~ store.name ~ '. Tap the button to pay by card.') }}
+{{ ui.facts([('For', link.description, False), ('Amount', ui.money(link.amount), False)]) }}
+{{ ui.button('Pay ' ~ ui.money(link.amount), link.url) }}
+<p style="margin:16px 0 0 0;font-size:13px;line-height:20px;color:{{ c.muted }};">Button not working? Copy this link into your browser:<br><a href="{{ link.url }}" style="color:{{ c.teal }};word-break:break-all;">{{ link.url }}</a></p>
+{% endblock %}

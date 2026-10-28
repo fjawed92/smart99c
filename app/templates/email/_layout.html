@@ -1,0 +1,50 @@
+{#- Shared shell for customer emails ("Clean Receipt" design).
+    Email apps ignore <style> blocks and modern CSS, so everything is tables
+    with inline styles. Colors and fonts come from render_email() as `c`. -#}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>{{ subject }}</title>
+</head>
+<body style="margin:0;padding:0;background:{{ c.page }};">
+{%- if preheader %}
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:{{ c.page }};">{{ preheader }}&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;</div>
+{%- endif %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:{{ c.page }};">
+<tr><td align="center" style="padding:24px 12px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:{{ c.white }};border-top:5px solid {{ c.pink }};border-radius:6px;">
+    <tr><td style="padding:28px 24px 0 24px;">
+      <a href="{{ site_url }}" style="text-decoration:none;"><img src="{{ logo_url }}" width="180" height="35" alt="{{ store.name }}" style="display:block;border:0;width:180px;height:auto;font-family:{{ c.font }};font-size:20px;font-weight:700;color:{{ c.ink }};"></a>
+    </td></tr>
+    <tr><td style="padding:24px 24px 28px 24px;font-family:{{ c.font }};font-size:16px;line-height:24px;color:{{ c.text }};">
+      {% block content %}{% endblock %}
+      {%- if show_store %}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;border-top:1px solid {{ c.hair }};">
+        <tr>
+          <td valign="top" width="50%" style="padding:20px 12px 0 0;font-family:{{ c.font }};font-size:14px;line-height:21px;color:{{ c.text }};">
+            <div style="font-size:13px;font-weight:600;color:{{ c.muted }};">Where</div>
+            {% for line in address_lines %}{{ line }}<br>{% endfor %}
+            <a href="{{ maps_url }}" style="color:{{ c.teal }};">Get directions</a>
+          </td>
+          <td valign="top" width="50%" style="padding:20px 0 0 0;font-family:{{ c.font }};font-size:14px;line-height:21px;color:{{ c.text }};">
+            <div style="font-size:13px;font-weight:600;color:{{ c.muted }};">Hours</div>
+            {% for days, hours in store.hours %}{{ days }} {{ hours }}<br>{% endfor %}
+            <a href="tel:{{ store.phone_href }}" style="color:{{ c.teal }};">{{ store.phone }}</a>
+          </td>
+        </tr>
+      </table>
+      {%- endif %}
+    </td></tr>
+    <tr><td style="background:{{ c.gray }};padding:18px 24px;border-radius:0 0 6px 6px;font-family:{{ c.font }};font-size:13px;line-height:20px;color:{{ c.muted }};text-align:center;">
+      {% if footer_note %}{{ footer_note }}<br>{% endif %}
+      {{ store.name }} · {{ store.address }} · {{ store.phone }}
+    </td></tr>
+  </table>
+</td></tr>
+</table>
+</body>
+</html>

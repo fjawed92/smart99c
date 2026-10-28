@@ -7,8 +7,11 @@ is encrypted at rest with a Fernet key derived from SECRET_KEY.
 import smtplib
 from email.message import EmailMessage
 from email.utils import formataddr
-from flask import current_app
+from urllib.parse import quote_plus
+
+from flask import current_app, render_template, url_for
 from app.helpers import get_site_setting, decrypt_secret
+from app.store import STORE
 
 
 MAIL_KEYS = [
@@ -84,3 +87,46 @@ def send_email(to_email, subject, html_body, text_body=None):
             smtp.ehlo()
         smtp.login(cfg['username'], cfg['password'])
         smtp.send_message(msg, from_addr=cfg['from_email'], to_addrs=[to_email])
+
+
+# ─── Branded templates ──────────────────────────────────────────────────────
+
+# Email-safe palette and fonts for the "Clean Receipt" design (matches the
+# site's colors; email apps can't load web fonts, so system fonts only).
+EMAIL_STYLE = {
+    'page': '#F4F1F0', 'white': '#FFFFFF', 'gray': '#F4F1F0', 'hair': '#EAD9D5',
+    'text': '#2A1215', 'muted': '#7A5C5F', 'ink': '#5E171C',
+    'teal': '#2E6E6E', 'pink': '#F0668E',
+    'font': "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif",
+    'mono': "Menlo,Consolas,'Courier New',monospace",
+    # pill tones: (background, text)
+    'tones': {
+        'ok': ('#D8F2E4', '#12824F'),
+        'info': ('#E3F0EF', '#2E6E6E'),
+        'warn': ('#FFF4D1', '#7A4B00'),
+        'muted': ('#F4F1F0', '#7A5C5F'),
+    },
+}
+
+
+def _external(endpoint, **values):
+    try:
+        return url_for(endpoint, _external=True, **values)
+    except RuntimeError:  # no request context (e.g. a shell script)
+        return ''
+
+
+def render_email(template, subject, **context):
+    """Render a customer email from templates/email/ with the shared layout."""
+    head, _, tail = STORE['address'].partition(', ')
+    return render_template(
+        f'email/{template}',
+        subject=subject,
+        c=EMAIL_STYLE,
+        store=STORE,
+        address_lines=[head, tail] if tail else [STORE['address']],
+        maps_url='https://maps.google.com/?q=' + quote_plus(STORE['address']),
+        site_url=_external('main.index'),
+        logo_url=_external('static', filename='img/email-logo.png'),
+        **context,
+    )

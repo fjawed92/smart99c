@@ -1,0 +1,43 @@
+{#- Small building blocks for customer emails. Import with context. -#}
+
+{% macro pill(label, tone='ok') -%}
+{%- set bg, fg = c.tones[tone] -%}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+  <td style="background:{{ bg }};color:{{ fg }};border-radius:999px;padding:5px 12px;font-family:{{ c.font }};font-size:13px;line-height:16px;font-weight:600;">&#9679;&nbsp;{{ label }}</td>
+</tr></table>
+{%- endmacro %}
+
+{% macro heading(title, lead=None) -%}
+<h1 style="margin:16px 0 8px 0;font-family:{{ c.font }};font-size:26px;line-height:32px;font-weight:700;color:{{ c.text }};">{{ title }}</h1>
+{%- if lead %}<p style="margin:0 0 22px 0;color:{{ c.muted }};">{{ lead }}</p>{% endif %}
+{%- endmacro %}
+
+{#- rows: [(label, value, mono?)] -#}
+{% macro facts(rows) -%}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:{{ c.gray }};border-radius:8px;margin:0 0 22px 0;">
+  <tr><td style="padding:4px 18px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+    {%- for label, value, mono in rows %}
+      <tr>
+        <td style="padding:11px 0;{% if not loop.last %}border-bottom:1px solid {{ c.hair }};{% endif %}white-space:nowrap;font-family:{{ c.font }};font-size:15px;line-height:20px;color:{{ c.muted }};">{{ label }}</td>
+        <td align="right" style="padding:11px 0 11px 12px;{% if not loop.last %}border-bottom:1px solid {{ c.hair }};{% endif %}font-family:{{ c.mono if mono else c.font }};font-size:15px;line-height:20px;font-weight:600;color:{{ c.text }};">{{ value }}</td>
+      </tr>
+    {%- endfor %}
+    </table>
+  </td></tr>
+</table>
+{%- endmacro %}
+
+{% macro button(label, url) -%}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 6px 0;"><tr>
+  <td align="center" bgcolor="{{ c.teal }}" style="border-radius:8px;">
+    <a href="{{ url }}" style="display:block;padding:15px 20px;font-family:{{ c.font }};font-size:16px;line-height:20px;font-weight:700;color:#FFFFFF;text-decoration:none;border-radius:8px;">{{ label }}</a>
+  </td>
+</tr></table>
+{%- endmacro %}
+
+{% macro section_label(text) -%}
+<div style="margin:26px 0 4px 0;padding-top:22px;border-top:1px solid {{ c.hair }};font-family:{{ c.mono }};font-size:12px;line-height:16px;letter-spacing:1px;text-transform:uppercase;color:{{ c.muted }};">{{ text }}</div>
+{%- endmacro %}
+
+{% macro money(v) %}${{ '%.2f'|format(v) }}{% endmacro %}
