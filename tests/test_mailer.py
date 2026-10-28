@@ -172,3 +172,18 @@ def test_admin_saves_order_alert_settings(admin_client, db):
     assert get_site_setting('order_alert_enabled') == '0'  # switch left off
     page = admin_client.get('/admin/email-settings').get_data(as_text=True)
     assert 'New Order Alerts' in page and 'me@example.com' in page
+
+
+def test_one_failed_email_does_not_stop_the_others(app, db, simple_product, monkeypatch):
+    _configure_mail(db)
+    order = _order(db, simple_product, payment='card')
+    sent = []
+
+    def flaky(to, subj, html, text_body=None):
+        if to == 'a@k.com':
+            raise OSError('Network is unreachable')
+        sent.append(to)
+    monkeypatch.setattr(mailer, 'send_email', flaky)
+    with app.test_request_context():
+        pickup.notify_new_order(order)
+    assert sent == ['store@example.com']

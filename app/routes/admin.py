@@ -51,7 +51,7 @@ def dashboard():
     today = local_today()
     today_start, month_start = day_start_utc(today), day_start_utc(today.replace(day=1))
 
-    total_orders = Order.query.count()
+    total_orders = Order.query.filter(Order.status.notin_(['cancelled', 'refunded'])).count()
     revenue_today = db.session.query(db.func.sum(Order.total))\
         .filter(Order.created_at >= today_start,
                 Order.status.notin_(['cancelled', 'refunded'])).scalar() or 0
@@ -1000,6 +1000,23 @@ def update_order_status(order_id):
     db.session.commit()
     flash(f'Order {order.order_number} status updated to {new_status}.', 'success')
     return redirect(url_for('admin.order_detail', order_id=order_id))
+
+
+@admin_bp.route('/orders/<int:order_id>/delete', methods=['POST'])
+@admin_required
+def delete_order(order_id):
+    """Remove an order for good (test orders, duplicates, mistakes)."""
+    order = Order.query.get_or_404(order_id)
+    number = order.order_number
+    # An order still being filled holds stock; give it back. Cancelled and
+    # no-show orders were restocked already, finished ones left the store.
+    if order.status in Order.OPEN_STATUSES:
+        from app.services.pickup import restock
+        restock(order)
+    db.session.delete(order)
+    db.session.commit()
+    flash(f'Order {number} deleted.', 'success')
+    return redirect(url_for('admin.orders'))
 
 
 @admin_bp.route('/orders/<int:order_id>/pickup', methods=['POST'])

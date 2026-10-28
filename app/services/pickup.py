@@ -4,6 +4,7 @@ All settings live in Admin → Settings (SiteSettings rows); the defaults below
 apply until the owner changes them. Times are stored in UTC like every other
 timestamp in the app and shown in the store's local time.
 """
+import threading
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -327,22 +328,46 @@ def _owner_email(order):
 
 
 def notify_new_order(order):
-    """Best-effort: email the customer their receipt and the store a copy."""
-    from app.services.mailer import send_email, is_mail_configured
+    """Best-effort: email the customer their receipt and the store a copy.
+
+    The emails are built now but sent in the background, so a slow or
+    unreachable mail server never keeps the customer waiting at checkout.
+    """
+    from app.services.mailer import is_mail_configured
+    messages = []
     try:
         if not is_mail_configured():
             return
-    except Exception:
-        return
-    email_customer(order, 'reserved' if order.is_cash else 'placed')
-    try:
+        addr = order.shipping_address
+        if addr and addr.email:
+            kind = 'reserved' if order.is_cash else 'placed'
+            messages.append((addr.email, *_email_body(order, kind)))
         recipients = order_alert_recipients()
         if recipients:
-            subject, html, text = _owner_email(order)
-            for to in recipients:
-                send_email(to, subject, html, text)
+            alert = _owner_email(order)
+            messages += [(to, *alert) for to in recipients]
     except Exception:
-        current_app.logger.exception('Could not send new-order alert for %s', order.order_number)
+        current_app.logger.exception('Could not build order emails for %s', order.order_number)
+    if messages:
+        _send_in_background(messages, order.order_number)
+
+
+def _send_in_background(messages, order_number):
+    from app.services.mailer import send_email
+    app = current_app._get_current_object()
+
+    def deliver():
+        with app.app_context():
+            for to, subject, html, text in messages:
+                try:
+                    send_email(to, subject, html, text)
+                except Exception:
+                    app.logger.exception('Could not email %s about %s', to, order_number)
+
+    if app.config.get('TESTING'):
+        deliver()
+    else:
+        threading.Thread(target=deliver).start()
 
 
 # ─── Reminders and expired holds ─────────────────────────────────────────────
