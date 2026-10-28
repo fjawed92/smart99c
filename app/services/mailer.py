@@ -5,8 +5,7 @@ Gmail SMTP credentials from the admin UI at any time. The Gmail app password
 is encrypted at rest with a Fernet key derived from SECRET_KEY.
 """
 import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+from email.message import EmailMessage
 from email.utils import formataddr
 from flask import current_app
 from app.helpers import get_site_setting, decrypt_secret
@@ -68,14 +67,15 @@ def send_email(to_email, subject, html_body, text_body=None):
     if not (cfg['server'] and cfg['username'] and cfg['password']):
         raise RuntimeError('Email is not configured. Add SMTP settings in Admin → Email.')
 
-    msg = MIMEMultipart('alternative')
+    # EmailMessage encodes non-ASCII text (e.g. the ¢ in "99¢") as UTF-8 in
+    # both headers and body; the old MIMEText + sendmail path crashed on it.
+    msg = EmailMessage()
     msg['Subject'] = subject
     sender = formataddr((cfg['from_name'], cfg['from_email'])) if cfg['from_name'] else cfg['from_email']
     msg['From'] = sender
     msg['To'] = to_email
-    if text_body:
-        msg.attach(MIMEText(text_body, 'plain'))
-    msg.attach(MIMEText(html_body, 'html'))
+    msg.set_content(text_body or 'This message requires an HTML-capable email client.')
+    msg.add_alternative(html_body, subtype='html')
 
     with smtplib.SMTP(cfg['server'], cfg['port'], timeout=20) as smtp:
         smtp.ehlo()
@@ -83,4 +83,4 @@ def send_email(to_email, subject, html_body, text_body=None):
             smtp.starttls()
             smtp.ehlo()
         smtp.login(cfg['username'], cfg['password'])
-        smtp.sendmail(cfg['from_email'], [to_email], msg.as_string())
+        smtp.send_message(msg, from_addr=cfg['from_email'], to_addrs=[to_email])
