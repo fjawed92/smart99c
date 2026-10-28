@@ -1624,6 +1624,8 @@ def email_settings():
         set_site_setting('mail_username', mail_username)
         set_site_setting('mail_from_name', mail_from_name)
         set_site_setting('mail_from_email', mail_from_email)
+        set_site_setting('order_alert_enabled', '1' if request.form.get('order_alert_enabled') == 'on' else '0')
+        set_site_setting('order_alert_emails', (request.form.get('order_alert_emails') or '').strip())
         if new_password:
             set_site_setting('mail_password_encrypted', encrypt_secret(new_password))
         db.session.commit()
@@ -1658,6 +1660,8 @@ def email_settings():
         'mail_username': get_site_setting('mail_username') or current_app.config.get('MAIL_USERNAME', ''),
         'mail_from_name': get_site_setting('mail_from_name', ''),
         'mail_from_email': get_site_setting('mail_from_email') or current_app.config.get('MAIL_USERNAME', ''),
+        'order_alert_enabled': get_site_setting('order_alert_enabled', '1'),
+        'order_alert_emails': get_site_setting('order_alert_emails', ''),
     }
     return render_template('admin/email_settings.html',
                            settings=settings_dict,

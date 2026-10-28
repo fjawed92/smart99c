@@ -313,6 +313,7 @@ def confirm_order():
                         stripe_payment_intent_id=payment_intent_id,
                         stripe_charge_id=charge_id,
                         stripe_livemode=livemode)
+    pickup.notify_new_order(order)
 
     return jsonify({'success': True, 'order_number': order.order_number,
                     'redirect': url_for('checkout.order_confirmation',
@@ -353,7 +354,7 @@ def reserve_cash():
                         status='processing',
                         payment_method='cash',
                         pickup_deadline=pickup.pickup_deadline(settings=settings))
-    pickup.email_customer(order, 'reserved')
+    pickup.notify_new_order(order)
     return jsonify({'success': True, 'order_number': order.order_number,
                     'redirect': url_for('checkout.order_confirmation',
                                         order_number=order.order_number)})
