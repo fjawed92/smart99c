@@ -123,7 +123,7 @@ def times_used_by(promo, email):
     email = (email or '').strip().lower()
     if not email:
         return 0
-    return (Order.query.join(ShippingAddress)
+    return (Order.visible().join(ShippingAddress)
             .filter(Order.promo_code == promo.code,
                     db.func.lower(ShippingAddress.email) == email,
                     Order.status.notin_(('cancelled', 'refunded')))

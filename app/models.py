@@ -291,6 +291,9 @@ class Order(db.Model):
     cancelled_at = db.Column(db.DateTime)
     no_show_at = db.Column(db.DateTime)
     refunded_at = db.Column(db.DateTime)
+    # Deleted by staff (here or in IZY Ops): cancelled, stock put back, and
+    # left out of every list and total. Kept so IZY Ops and the register hear.
+    deleted_at = db.Column(db.DateTime, index=True)
     reminder_sent_at = db.Column(db.DateTime)
     # Given back to the card so far (refunds from IZY Ops, partial or full).
     amount_refunded = db.Column(db.Numeric(10, 2), nullable=False, default=0)
@@ -302,6 +305,15 @@ class Order(db.Model):
     items = db.relationship('OrderItem', back_populates='order', cascade='all, delete-orphan')
     shipping_address = db.relationship('ShippingAddress', back_populates='order',
                                        uselist=False, cascade='all, delete-orphan')
+
+    @classmethod
+    def visible(cls):
+        """Every order except deleted ones — what lists and totals count."""
+        return cls.query.filter(cls.deleted_at.is_(None))
+
+    @property
+    def is_deleted(self):
+        return self.deleted_at is not None
 
     @property
     def is_pickup(self):
@@ -340,7 +352,8 @@ class Order(db.Model):
                   ('delivered_at', 'Delivered', 'success'),
                   ('no_show_at', 'No-show · items put back in stock', 'danger'),
                   ('cancelled_at', 'Cancelled · items put back in stock', 'danger'),
-                  ('refunded_at', 'Refunded', 'danger')]
+                  ('refunded_at', 'Refunded', 'danger'),
+                  ('deleted_at', 'Deleted · hidden from orders and totals', 'danger')]
         steps += [(label, getattr(self, col), tone) for col, label, tone in labels if getattr(self, col)]
         steps.sort(key=lambda s: s[1])
         column = self.STATUS_TIMES.get(self.status)

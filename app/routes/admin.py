@@ -51,12 +51,12 @@ def dashboard():
     today = local_today()
     today_start, month_start = day_start_utc(today), day_start_utc(today.replace(day=1))
 
-    total_orders = Order.query.count()
+    total_orders = Order.visible().count()
     revenue_today = db.session.query(db.func.sum(Order.total))\
-        .filter(Order.created_at >= today_start,
+        .filter(Order.created_at >= today_start, Order.deleted_at.is_(None),
                 Order.status.notin_(['cancelled', 'refunded'])).scalar() or 0
     revenue_month = db.session.query(db.func.sum(Order.total))\
-        .filter(Order.created_at >= month_start,
+        .filter(Order.created_at >= month_start, Order.deleted_at.is_(None),
                 Order.status.notin_(['cancelled', 'refunded'])).scalar() or 0
     total_products = Product.query.filter_by(is_active=True).count()
     low_stock = Product.query.filter(
@@ -68,7 +68,7 @@ def dashboard():
         User.created_at >= month_start,
         User.is_admin == False
     ).count()
-    recent_orders = Order.query.order_by(Order.created_at.desc()).limit(10).all()
+    recent_orders = Order.visible().order_by(Order.created_at.desc()).limit(10).all()
 
     return render_template('admin/dashboard.html',
                            total_orders=total_orders,
@@ -359,7 +359,7 @@ def orders_export():
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
 
-    orders = Order.query.order_by(Order.created_at.desc()).all()
+    orders = Order.visible().order_by(Order.created_at.desc()).all()
     for o in orders:
         items_str = '; '.join(
             f'{i.display_name} x{i.quantity} @ ${i.unit_price}' for i in o.items
@@ -901,7 +901,7 @@ def orders():
     date_to = request.args.get('date_to', '')
     now = datetime.utcnow()
 
-    query = Order.query
+    query = Order.visible()
     if search:
         digits = ''.join(c for c in search if c.isdigit())
         conds = [Order.order_number.ilike(f'%{search}%'),
@@ -920,17 +920,17 @@ def orders():
     if status and tab == 'all':
         query = query.filter_by(status=status)
 
-    tab_counts = {key: _tab_filter(Order.query, key, now).count() for key, _ in ORDER_TABS}
+    tab_counts = {key: _tab_filter(Order.visible(), key, now).count() for key, _ in ORDER_TABS}
     pagination = _tab_filter(query, tab, now).order_by(Order.created_at.desc())\
         .paginate(page=page, per_page=25)
 
     # Summary boxes
-    open_cash = Order.query.filter(Order.payment_method == 'cash',
-                                   Order.status.in_(Order.OPEN_STATUSES)).all()
+    open_cash = Order.visible().filter(Order.payment_method == 'cash',
+                                       Order.status.in_(Order.OPEN_STATUSES)).all()
     today_start = to_utc(to_local(now).replace(hour=0, minute=0, second=0, microsecond=0))
-    paid_today = Order.query.filter(Order.payment_method == 'card',
-                                    Order.created_at >= today_start,
-                                    Order.status.notin_(('pending', 'cancelled', 'refunded'))).all()
+    paid_today = Order.visible().filter(Order.payment_method == 'card',
+                                        Order.created_at >= today_start,
+                                        Order.status.notin_(('pending', 'cancelled', 'refunded'))).all()
     summary = {
         'cash_due': sum((o.total for o in open_cash), 0),
         'cash_count': len(open_cash),
@@ -966,7 +966,7 @@ def order_detail(order_id):
     addr = order.shipping_address
     past_orders = 0
     if addr and addr.email:
-        past_orders = Order.query.join(ShippingAddress)\
+        past_orders = Order.visible().join(ShippingAddress)\
             .filter(db.func.lower(ShippingAddress.email) == addr.email.lower(),
                     Order.id != order.id).count()
     hold_pct = 0
@@ -990,6 +990,9 @@ def update_order_status(order_id):
     new_status = request.form.get('status')
     if new_status not in Order.STATUS_CHOICES:
         flash('Invalid status.', 'error')
+        return redirect(url_for('admin.order_detail', order_id=order_id))
+    if order.is_deleted:
+        flash(f'Order {order.order_number} was deleted and can\'t be changed.', 'warning')
         return redirect(url_for('admin.order_detail', order_id=order_id))
 
     if new_status in ('cancelled', 'no_show') and order.status not in ('cancelled', 'refunded', 'no_show'):
@@ -1017,6 +1020,9 @@ def order_pickup_action(order_id):
     closed = ('picked_up', 'delivered', 'no_show', 'cancelled', 'refunded')
     msg = None
 
+    if order.is_deleted and action != 'note':
+        flash(f'Order {order.order_number} was deleted and can\'t be changed.', 'warning')
+        return redirect(back)
     if action == 'note':
         order.notes = (request.form.get('notes') or '').strip()
         msg = 'Note saved.'
@@ -1067,6 +1073,21 @@ def order_pickup_action(order_id):
     if msg:
         flash(msg, 'success')
     return redirect(back)
+
+
+@admin_bp.route('/orders/<int:order_id>/delete', methods=['POST'])
+@admin_required
+def delete_order(order_id):
+    """Delete an order: it's cancelled, its items go back in stock, and it no
+    longer shows in any list or total — here, in IZY Ops or on the register."""
+    from app.services.pickup import delete_order as delete
+    order = Order.query.get_or_404(order_id)
+    if delete(order):
+        db.session.commit()
+        flash(f'Order {order.order_number} deleted. It no longer counts in any totals.', 'success')
+    else:
+        flash(f'Order {order.order_number} was already deleted.', 'info')
+    return redirect(url_for('admin.orders'))
 
 
 # ─── Users ───────────────────────────────────────────────────────────────────
@@ -1143,7 +1164,7 @@ def new_user():
 @admin_required
 def user_detail(user_id):
     user = User.query.get_or_404(user_id)
-    orders = Order.query.filter_by(user_id=user_id).order_by(Order.created_at.desc()).all()
+    orders = Order.visible().filter_by(user_id=user_id).order_by(Order.created_at.desc()).all()
     return render_template('admin/user_detail.html', user=user, orders=orders)
 
 

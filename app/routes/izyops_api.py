@@ -9,7 +9,8 @@ this site with no code of its own: Settings → Websites in IZY Ops, pointed at
   PUT   /products/<sku>       IZY Ops' version of a product's details
   POST  /stock                absolute stock levels by SKU
   GET   /orders               orders changed since a cursor
-  PATCH /orders/<id>          a status (and simple details) set in IZY Ops
+  PATCH /orders/<id>          a status (and simple details) set in IZY Ops,
+                              or ``{"deleted": true}``: the order was deleted
   POST  /orders/<id>/refund   give part or all of a card payment back
 
 Login: HTTP Basic with ``IZYOPS_API_USERNAME`` / ``IZYOPS_API_PASSWORD``;
@@ -507,6 +508,9 @@ def serialize_order(order):
         'payment_method': order.payment_method,
         'refunded': order.status == 'refunded',
         'canceled': order.status in _RESTOCKED,
+        # Deleted by staff: cancelled and left out of every list and total.
+        'deleted': order.is_deleted,
+        'deleted_at': _iso(order.deleted_at),
         # Stock comes off the shelf when the order is placed; a cancel or
         # no-show puts it back.
         'inventory_captured': order.status not in _RESTOCKED,
@@ -575,7 +579,12 @@ def _note(order, text, now):
 def update_order(order_id):
     """``{"status": "making"|"ready"|"completed"|"canceled", "actor", "note",
     "edit": {customer_name, customer_phone, customer_email, notes},
-    "pay_status": "paid_instore"}``.
+    "pay_status": "paid_instore", "deleted": true}``.
+
+    ``deleted: true``: staff deleted the order in IZY Ops. It is cancelled
+    here (stock back unless a cancel or no-show already did that) and hidden
+    from every list and total, whatever state it was in; nothing else in the
+    request is applied. Sending it again is harmless.
 
     ``pay_status: "paid_instore"``: the customer of a cash order paid at the
     store's register. It is recorded (cash_paid_at, "Paid at register")
@@ -587,9 +596,20 @@ def update_order(order_id):
     A finished order isn't changed (409). Changing the items of an order
     isn't supported here (400): do that on this site's admin.
     """
-    from app.services.pickup import email_customer, restock
+    from app.services.pickup import delete_order, email_customer, restock
 
     body = request.get_json(silent=True) or {}
+    if body.get('deleted') is True:
+        order = Order.query.filter(Order.id == order_id, Order.status != 'pending').first()
+        if order is None:
+            return _err('Not found', 404)
+        now = _now()
+        if delete_order(order, now):
+            note = str(body.get('note') or '').strip()[:300]
+            _note(order, f"Deleted in IZY Ops by {str(body.get('actor') or 'IZY Ops').strip()[:80]}"
+                  + (f': {note}' if note else ''), now)
+            db.session.commit()
+        return _ok(serialize_order(order))
     status = body.get('status')
     edit = body.get('edit')
     paid = body.get('pay_status')

@@ -17,8 +17,19 @@
     <i class="bi bi-arrow-left"></i> Orders
   </a>
   <span class="badge status-{{ order.status }} fs-6">{{ order.status_label }}</span>
+  {% if order.is_deleted %}<span class="badge text-bg-dark fs-6">Deleted</span>{% endif %}
   <span class="text-muted small">Placed {{ order.created_at|local_time('%a, %b %-d at %-I:%M %p') }}</span>
 </div>
+
+{% if order.is_deleted %}
+<div class="alert alert-dark d-flex align-items-center gap-3 mb-4">
+  <i class="bi bi-trash3 fs-3"></i>
+  <div>
+    <div class="fw-700">This order was deleted {{ order.deleted_at|local_time('%b %-d at %-I:%M %p') }}.</div>
+    <div class="small">It's hidden from the orders list and left out of every total, here and in IZY Ops.</div>
+  </div>
+</div>
+{% endif %}
 
 <!-- What kind of order -->
 {% if order.is_cash %}
@@ -219,8 +230,9 @@
     </div>
     {% endif %}
 
+    {% if not order.is_deleted %}
     <!-- Advanced status -->
-    <div class="card border-0 shadow-sm">
+    <div class="card border-0 shadow-sm mb-4">
       <div class="card-header bg-white border-0 pt-3"><h6 class="fw-700 mb-0">Change status manually</h6></div>
       <div class="card-body">
         <form method="POST" action="{{ url_for('admin.update_order_status', order_id=order.id) }}">
@@ -234,6 +246,19 @@
         </form>
       </div>
     </div>
+
+    <!-- Delete -->
+    <div class="card border-0 shadow-sm border-danger-subtle">
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('admin.delete_order', order_id=order.id) }}"
+              onsubmit="return confirm('Delete order {{ order.order_number }}?\n\nIt will be cancelled, its items go back in stock, and it disappears from the orders list and every total — here, in IZY Ops and on the register.{{ '' if order.is_cash else ' This does NOT refund the card; refund it first if the customer paid.' }}\n\nThis can\'t be undone.')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <button type="submit" class="btn btn-outline-danger w-100 fw-700"><i class="bi bi-trash3 me-2"></i>Delete order</button>
+        </form>
+        <div class="small text-muted mt-2">For test orders or mistakes. Unlike cancel, a deleted order doesn't count in any totals.</div>
+      </div>
+    </div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}
