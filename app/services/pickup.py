@@ -91,7 +91,7 @@ def no_show_count(email='', phone=''):
         conds.append(ShippingAddress.phone.like(f'%{digits[-4:]}'))
     if not conds:
         return 0
-    rows = (Order.query.join(ShippingAddress)
+    rows = (Order.visible().join(ShippingAddress)
             .filter(Order.status == 'no_show', db.or_(*conds)).all())
     # The phone match above is loose (last 4 digits); confirm the full number.
     count = 0
@@ -128,6 +128,21 @@ def restock(order):
                 item.variant.stock_quantity += item.quantity
             else:
                 item.product.stock_quantity += item.quantity
+
+
+def delete_order(order, now=None):
+    """Delete an order: cancel it (stock back on the shelf unless a cancel or
+    no-show already put it back) and hide it from every list and total.
+    The row stays so IZY Ops (and through it the register) hears about it.
+    Doesn't refund a card. Returns False when it was already deleted."""
+    if order.deleted_at is not None:
+        return False
+    now = now or datetime.utcnow()
+    if order.status not in ('cancelled', 'no_show'):
+        restock(order)
+        order.set_status('cancelled', now)
+    order.deleted_at = now
+    return True
 
 
 # ─── Customer emails ─────────────────────────────────────────────────────────
