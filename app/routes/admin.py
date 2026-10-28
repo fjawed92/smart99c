@@ -1605,7 +1605,7 @@ def visitors():
 @admin_bp.route('/email-settings', methods=['GET', 'POST'])
 @admin_required
 def email_settings():
-    from app.services.mailer import send_email, is_mail_configured
+    from app.services.mailer import send_email, is_mail_configured, render_email
 
     if request.method == 'POST':
         action = request.form.get('action', 'save')
@@ -1634,12 +1634,13 @@ def email_settings():
                 flash('Enter a recipient address to send a test email.', 'error')
                 return redirect(url_for('admin.email_settings'))
             try:
+                subject = 'Smart 99¢ Plus — Test Email'
                 send_email(
                     test_to,
-                    'Smart 99¢ Plus — Test Email',
-                    '<p>This is a test email from your Smart 99¢ Plus admin panel.</p>'
-                    f'<p>If you received this, your SMTP settings are working.</p>'
-                    f'<p style="color:#888;font-size:0.85em;">Sent to {test_to}.</p>',
+                    subject,
+                    render_email('test.html', subject, to_email=test_to,
+                                 from_email=mail_from_email,
+                                 preheader='Your SMTP settings are working.'),
                     text_body=f'Test email from Smart 99¢ Plus admin panel. Sent to {test_to}.',
                 )
                 flash(f'Test email sent to {test_to}.', 'success')
@@ -1843,21 +1844,19 @@ def void_payment_link(link_id):
 
 def _send_payment_link_email(link):
     """Best-effort email send. Returns (ok, error_message)."""
-    from app.services.mailer import send_email
+    from app.services.mailer import send_email, render_email
     greeting = f'Hi {link.customer_name},' if link.customer_name else 'Hi there,'
-    html = f"""
-        <p>{greeting}</p>
-        <p>Here is your payment link from Smart 99¢ Plus:</p>
-        <p><strong>{link.description}</strong><br>
-        Amount: <strong>${link.amount}</strong></p>
-        <p><a href="{link.url}" style="display:inline-block;padding:10px 18px;background:#E8334A;color:#fff;text-decoration:none;border-radius:6px;">Pay now</a></p>
-        <p>Or copy this URL into your browser: <br><a href="{link.url}">{link.url}</a></p>
-        <p style="color:#888;font-size:0.85em;">If you did not request this, please ignore this email.</p>
-    """
+    subject = f'Payment link: {link.description}'
+    first = (link.customer_name or '').split(' ')[0]
+    html = render_email('payment_link.html', subject, link=link,
+                        greeting_title=f'Hi {first}, here\'s your payment link.' if first
+                        else 'Here\'s your payment link.',
+                        preheader=f'${link.amount:.2f} for {link.description}. Pay securely by card.',
+                        footer_note='If you did not request this, you can ignore this email.')
     text = (f'{greeting}\n\nYour payment link from Smart 99¢ Plus:\n'
             f'{link.description}\nAmount: ${link.amount}\n\n{link.url}\n')
     try:
-        send_email(link.customer_email, f'Payment link: {link.description}', html, text_body=text)
+        send_email(link.customer_email, subject, html, text_body=text)
         link.email_sent_at = datetime.utcnow()
         db.session.commit()
         return True, None

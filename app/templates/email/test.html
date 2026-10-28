@@ -1,0 +1,7 @@
+{% extends 'email/_layout.html' %}
+{% import 'email/_ui.html' as ui with context %}
+{% block content %}
+{{ ui.pill('Email is working') }}
+{{ ui.heading('Your store email is set up.', 'This test came from your ' ~ store.name ~ ' admin panel. Customer emails like pickup notices and payment links will look like this.') }}
+{{ ui.facts([('Sent to', to_email, False), ('Sent from', from_email, False)]) }}
+{% endblock %}

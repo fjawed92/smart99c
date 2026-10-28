@@ -156,10 +156,84 @@ def _email_body(order, kind):
         link = url_for('checkout.order_confirmation', order_number=order.order_number, _external=True)
     except RuntimeError:
         link = ''
-    html = (f'<p>{text}</p>'
-            + (f'<p><a href="{link}">View your order</a></p>' if link else '')
-            + f'<p style="color:#666">{footer}</p>')
-    return f'{subject} — {order.order_number}', html, f'{text}\n\n{link}\n\n{footer}'
+    subject = f'{subject} — {order.order_number}'
+    html = _email_html(order, kind, subject, name, total, deadline, link)
+    return subject, html, f'{text}\n\n{link}\n\n{footer}'
+
+
+def _email_html(order, kind, subject, name, total, deadline, link):
+    """The branded HTML version of a pickup email (templates/email/order.html)."""
+    from app.services.mailer import render_email
+    cash = order.is_cash
+    number = ('Order', order.order_number, True)
+    due = [('Pick up by', deadline, False)] if order.pickup_deadline else []
+    pay = [('Pay at pickup', f'{total} cash', False)] if cash else [('Paid by card', total, False)]
+    more_time = f'Need more time? Call us at {STORE["phone"]} and we\'ll hold it.'
+    views = {
+        'reserved': dict(
+            pill_label='Reserved', pill_tone='info',
+            title=f'Thanks, {name}! Your order is reserved.',
+            lead='We\'re packing it now and will email you as soon as it\'s ready at the counter.',
+            fact_rows=[number] + pay + due,
+            preheader=f'Pay {total} cash when you pick up. Order {order.order_number}.',
+            footer_note=more_time),
+        'ready': dict(
+            pill_label='Ready for pickup', pill_tone='ok',
+            title=f'Your order is packed, {name}.',
+            lead='It\'s waiting at the front counter. Give us your order number when you arrive'
+                 + (' and pay in cash.' if cash else '.'),
+            fact_rows=[number] + pay + due,
+            preheader=(f'Pay {total} cash by {deadline}. ' if cash and deadline else 'See you soon! ')
+                      + f'Order {order.order_number}.',
+            footer_note=more_time if cash else ''),
+        'reminder': dict(
+            pill_label='Pickup reminder', pill_tone='warn',
+            title=f'{name}, your order is still waiting.',
+            lead=f'Please pick it up and pay in cash by {deadline}. Need more time? '
+                 f'Call us at {STORE["phone"]}.',
+            fact_rows=[number] + pay + due,
+            preheader=f'Pick up by {deadline}. Order {order.order_number}.',
+            footer_note=''),
+        'released': dict(
+            pill_label='Order released', pill_tone='muted',
+            title=f'Hi {name}, your order was released.',
+            lead=f'It wasn\'t picked up by {deadline}, so the items went back on the shelf. '
+                 'You\'re welcome to place a new order any time.',
+            fact_rows=[number, ('Was due by', deadline, False)],
+            preheader=f'Order {order.order_number} went back on the shelf.',
+            footer_note='Questions? Call us at ' + STORE['phone'] + '.'),
+    }
+    view = views[kind]
+    if kind == 'released':
+        button_label, button_url = 'Shop again', _shop_url()
+    else:
+        button_label, button_url = 'View your order', link
+
+    rows = [('Subtotal', f'${order.subtotal:.2f}')]
+    if order.promo_discount and order.promo_discount > 0:
+        rows.append((f'Promo {order.promo_code or ""}'.strip(), f'−${order.promo_discount:.2f}'))
+    if order.cash_discount and order.cash_discount > 0:
+        rows.append(('Cash discount', f'−${order.cash_discount:.2f}'))
+    if order.shipping_cost and order.shipping_cost > 0:
+        rows.append(('Delivery', f'${order.shipping_cost:.2f}'))
+    rows.append(('Tax', f'${order.tax:.2f}'))
+    if order.service_fee and order.service_fee > 0:
+        rows.append(('Online service fee', f'${order.service_fee:.2f}'))
+    if kind == 'released':
+        total_label = 'Order total'
+    else:
+        total_label = 'Pay in cash at pickup' if cash else 'Paid'
+
+    return render_email('order.html', subject, order=order, button_label=button_label,
+                        button_url=button_url, total_rows=rows, total_label=total_label,
+                        show_store=kind != 'released', **view)
+
+
+def _shop_url():
+    try:
+        return url_for('shop.shop', _external=True)
+    except RuntimeError:
+        return ''
 
 
 def email_customer(order, kind):

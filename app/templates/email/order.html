@@ -1,0 +1,31 @@
+{% extends 'email/_layout.html' %}
+{% import 'email/_ui.html' as ui with context %}
+{% block content %}
+{{ ui.pill(pill_label, pill_tone) }}
+{{ ui.heading(title, lead) }}
+{{ ui.facts(fact_rows) }}
+{% if button_url %}{{ ui.button(button_label, button_url) }}{% endif %}
+
+{{ ui.section_label('Order summary') }}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:{{ c.font }};font-size:15px;line-height:20px;color:{{ c.text }};">
+{%- for item in order.items %}
+  <tr>
+    <td valign="top" width="34" style="padding:10px 0;{% if not loop.first %}border-top:1px dashed {{ c.hair }};{% endif %}font-family:{{ c.mono }};font-size:13px;color:{{ c.muted }};">{{ item.quantity }}&times;</td>
+    <td valign="top" style="padding:10px 0;{% if not loop.first %}border-top:1px dashed {{ c.hair }};{% endif %}">{{ item.display_name }}{% if item.quantity > 1 %}<div style="font-size:13px;color:{{ c.muted }};">{{ ui.money(item.unit_price) }} each</div>{% endif %}</td>
+    <td valign="top" align="right" style="padding:10px 0 10px 12px;{% if not loop.first %}border-top:1px dashed {{ c.hair }};{% endif %}white-space:nowrap;">{{ ui.money(item.total_price) }}</td>
+  </tr>
+{%- endfor %}
+{%- for label, amount in total_rows %}
+  <tr>
+    <td></td>
+    <td style="padding:6px 0;{% if loop.first %}border-top:1px solid {{ c.hair }};padding-top:12px;{% endif %}color:{{ c.muted }};">{{ label }}</td>
+    <td align="right" style="padding:6px 0 6px 12px;{% if loop.first %}border-top:1px solid {{ c.hair }};padding-top:12px;{% endif %}white-space:nowrap;color:{{ c.muted }};">{{ amount }}</td>
+  </tr>
+{%- endfor %}
+  <tr>
+    <td></td>
+    <td style="padding:12px 0 0 0;border-top:1.5px solid {{ c.text }};font-weight:700;">{{ total_label }}</td>
+    <td align="right" style="padding:12px 0 0 12px;border-top:1.5px solid {{ c.text }};font-weight:700;white-space:nowrap;">{{ ui.money(order.total) }}</td>
+  </tr>
+</table>
+{% endblock %}
