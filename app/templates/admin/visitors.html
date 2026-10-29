@@ -235,6 +235,7 @@
       <div class="card-header bg-white border-0 pt-3">
         <h6 class="fw-700 mb-0">What people search for</h6>
         <small class="text-muted"><span class="row-pill error">No results</span> means shoppers wanted it and couldn't find it.</small>
+        {% if r.attack_searches %}<small class="d-block text-muted mt-1">&#128737; {{ r.attack_searches }} hacking attempt{{ '' if r.attack_searches == 1 else 's' }} hidden from these numbers. They were blocked and found nothing.</small>{% endif %}
       </div>
       <div class="card-body p-0">
         <table class="table mb-0">

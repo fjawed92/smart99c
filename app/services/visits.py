@@ -5,6 +5,7 @@ Shoppers are told apart by a random id in their session cookie; no IP address,
 name or email is stored. Admins, bots and non-page requests are skipped.
 Tracking never breaks a page: any database error is logged and ignored.
 """
+import re
 import secrets
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
@@ -32,7 +33,16 @@ TRACKED_ENDPOINTS = {
 }
 
 BOT_WORDS = ('bot', 'spider', 'crawl', 'slurp', 'facebookexternalhit', 'preview',
-             'headless', 'python-requests', 'curl', 'wget', 'monitor', 'uptime')
+             'headless', 'python-requests', 'curl', 'wget', 'monitor', 'uptime',
+             'sqlmap', 'nikto', 'nmap', 'zgrab', 'masscan', 'acunetix', 'nuclei')
+
+# Searches that are hacking attempts (SQL injection, script injection), not shoppers.
+ATTACK_SEARCH = re.compile(
+    r"union\s+(all\s+)?select|select\s.*\sfrom\s|order\s+by\s+\d|group\s+by\s+\d"
+    r"|extractvalue\s*\(|updatexml\s*\(|sleep\s*\(|benchmark\s*\(|waitfor\s+delay"
+    r"|pg_sleep|information_schema|\b(and|or)\s+\d+\s*=\s*\d+|\bchar\s*\(|0x[0-9a-f]{2,}"
+    r"|--\s|--$|/\*|;\s*(drop|insert|update|delete)\b|<\s*script|javascript:|onerror\s*="
+    r"|\.\./|\$\{|\{\{")
 
 # Known referrer domains → friendly source name.
 SOURCES = [
@@ -50,6 +60,11 @@ RETENTION_DAYS = 400
 def _is_bot(ua):
     ua = (ua or '').lower()
     return not ua or any(word in ua for word in BOT_WORDS)
+
+
+def looks_like_attack(search):
+    """True when a search term is hacking code rather than something a shopper typed."""
+    return bool(search) and bool(ATTACK_SEARCH.search(search.lower()))
 
 
 def _device(ua):
@@ -155,6 +170,8 @@ def record_page_view(response):
             and response.mimetype == 'text/html'
             and _should_track()):
         search = (request.args.get('q') or '').strip().lower()[:120] or None
+        if looks_like_attack(search):
+            return response
         _save(event='view', endpoint=request.endpoint,
               product_id=g.get('visit_product_id'),
               search=search,
@@ -198,8 +215,16 @@ def build_report(days=30, now=None):
         SiteVisit.search_results, SiteVisit.order_total,
     ).filter(SiteVisit.created_at >= start_utc).all()
 
-    prev = db.session.query(SiteVisit.visitor_id, SiteVisit.event).filter(
+    prev = db.session.query(SiteVisit.visitor_id, SiteVisit.event, SiteVisit.search).filter(
         SiteVisit.created_at >= prev_start_utc, SiteVisit.created_at < start_utc).all()
+
+    # Leave out everything from visitors who tried hacking searches (older rows
+    # saved before attacks were filtered on the way in).
+    attackers = {r.visitor_id for r in rows if looks_like_attack(r.search)}
+    attackers |= {r.visitor_id for r in prev if looks_like_attack(r.search)}
+    attack_searches = sum(1 for r in rows if looks_like_attack(r.search))
+    rows = [r for r in rows if r.visitor_id not in attackers]
+    prev = [r for r in prev if r.visitor_id not in attackers]
 
     views = [r for r in rows if r.event == 'view']
     visitors = {r.visitor_id for r in views}
@@ -361,6 +386,7 @@ def build_report(days=30, now=None):
         'searches': searches,
         'missed_searches': missed_searches,
         'funnel': funnel,
+        'attack_searches': attack_searches,
     }
 
 
