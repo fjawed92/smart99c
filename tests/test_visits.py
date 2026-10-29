@@ -111,3 +111,51 @@ def test_google_analytics_only_with_valid_id(client, db):
     set_site_setting('ga_measurement_id', 'G-ABC123XYZ')
     db.session.commit()
     assert 'gtag/js?id=G-ABC123XYZ' in client.get('/').get_data(as_text=True)
+
+
+def test_attack_searches_are_not_recorded(client, db, simple_product):
+    client.get("/shop?q=' union all select 'abc'-- x", headers={'User-Agent': DESKTOP})
+    client.get('/shop?q=and extractvalue(1478,concat(0x7e,1))-- -', headers={'User-Agent': DESKTOP})
+    client.get('/shop', headers={'User-Agent': 'sqlmap/1.8'})
+    assert SiteVisit.query.count() == 0
+    client.get('/shop?q=gold balloons', headers={'User-Agent': DESKTOP})
+    assert [v.search for v in SiteVisit.query.all()] == ['gold balloons']
+
+
+def test_looks_like_attack_leaves_real_searches_alone():
+    from app.services.visits import looks_like_attack
+    for term in ['order by 1-- -', "' order by 1000-- -", 'union all select null--',
+                 "%' and extractvalue(7747,concat(0x7e))-- -", '1 and 1=1', '<script>alert(1)</script>']:
+        assert looks_like_attack(term), term
+    for term in ['balloons', 'happy birthday', 'order', 'select candy', '99 cent',
+                 'paper plates & cups', 'mylar 18"', "kid's toys", None, '']:
+        assert not looks_like_attack(term), term
+
+
+def test_report_hides_old_attack_rows(db):
+    now = datetime.utcnow()
+    db.session.add_all([
+        SiteVisit(visitor_id='bot', event='view', endpoint='shop.shop', path='/shop',
+                  search="' order by 1000-- -", search_results=0, created_at=now),
+        SiteVisit(visitor_id='bot', event='view', endpoint='main.index', path='/', created_at=now),
+        SiteVisit(visitor_id='real', event='view', endpoint='shop.shop', path='/shop',
+                  search='balloons', search_results=3, created_at=now),
+    ])
+    db.session.commit()
+    r = build_report(days=7)
+    assert r['visitors'] == 1
+    assert [s['term'] for s in r['searches']] == ['balloons']
+    assert r['attack_searches'] == 1
+
+
+def test_visitors_page_mentions_hidden_attacks(admin_client, db):
+    now = datetime.utcnow()
+    db.session.add_all([
+        SiteVisit(visitor_id='bot', event='view', endpoint='shop.shop', path='/shop',
+                  search='union all select null--', search_results=0, created_at=now),
+        SiteVisit(visitor_id='real', event='view', endpoint='main.index', path='/', created_at=now),
+    ])
+    db.session.commit()
+    html = admin_client.get('/admin/visitors').get_data(as_text=True)
+    assert '1 hacking attempt hidden' in html
+    assert 'union all select' not in html
