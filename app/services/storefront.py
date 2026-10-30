@@ -2,6 +2,8 @@
 
 - The scrolling news banner at the top of every page.
 - The "Shop by price" buttons on the home and shop pages.
+- The weekly Pokémon drop day and time (Admin → Settings), which drives the
+  home page countdown and the "restock" text across the site.
 
 Both are saved as JSON lists in SiteSettings. Until the owner saves them
 the site shows the starter lists below, so nothing changes on deploy.
@@ -17,11 +19,58 @@ FILTERS_KEY = 'shop_filters'
 MAX_TEXT = 160
 
 
+DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+
+def parse_drop_time(text):
+    """'16:00' / '4:30' → (hour, minute), or None if it isn't a real time."""
+    hour, sep, minute = str(text or '').strip().partition(':')
+    try:
+        hour, minute = int(hour), int(minute) if sep else 0
+    except ValueError:
+        return None
+    return (hour, minute) if 0 <= hour <= 23 and 0 <= minute <= 59 else None
+
+
+def _clock(hour, minute):
+    """(16, 0) → '4 PM', (9, 30) → '9:30 AM'."""
+    ampm = 'AM' if hour < 12 else 'PM'
+    shown = hour % 12 or 12
+    return f'{shown}:{minute:02d} {ampm}' if minute else f'{shown} {ampm}'
+
+
+def drop_schedule():
+    """The weekly Pokémon drop as set in Admin → Settings.
+
+    Until the owner saves it, app/store.py's Friday 4 PM is used.
+    """
+    try:
+        weekday = int(get_site_setting('drop_weekday', '') or STORE['restock_weekday'])
+    except ValueError:
+        weekday = STORE['restock_weekday']
+    if not 0 <= weekday <= 6:
+        weekday = STORE['restock_weekday']
+    hour, minute = (parse_drop_time(get_site_setting('drop_time', ''))
+                    or (STORE['restock_hour'], 0))
+    day = DAY_NAMES[weekday]
+    clock = _clock(hour, minute)
+    return {
+        'weekday': weekday,
+        'hour': hour,
+        'minute': minute,
+        'time': f'{hour:02d}:{minute:02d}',
+        'day': day,
+        'label': f'{day}s at {clock}',       # "Fridays at 4 PM"
+        'label_one': f'{day} at {clock}',    # "Friday at 4 PM"
+        'countdown': get_site_setting('drop_countdown_active', '1') == '1',
+    }
+
+
 def default_ticker():
     # The old single "Announcement" (Admin → Settings) leads the list.
     announcement = get_site_setting('announcement', '').strip()
     texts = ([announcement] if announcement else []) + [
-        f"Pokémon TCG restock {STORE['restock_label']}",
+        f"Pokémon TCG restock {drop_schedule()['label']}",
         'Same-day pickup in West Babylon',
         'Board games, plush & action figures',
         'Sleeves, binders & toploaders',
