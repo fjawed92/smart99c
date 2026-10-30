@@ -1,11 +1,27 @@
+from urllib.parse import urlsplit
+
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, login_required, current_user
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField, validators
-from app.extensions import db
+from app.extensions import db, limiter
 from app.models import User
 
 auth_bp = Blueprint('auth', __name__)
+
+
+def _safe_next(target):
+    """Return ``target`` only when it is a path on this site, else None.
+
+    Without this, a link like /login?next=https://evil.example would send a
+    customer to a lookalike site right after they signed in. Browsers treat
+    "//host" and "/\\host" as other sites too, so those are refused as well.
+    """
+    if not target or not target.startswith('/') or target.startswith('//'):
+        return None
+    if '\\' in target or urlsplit(target).netloc:
+        return None
+    return target
 
 
 class LoginForm(FlaskForm):
@@ -41,6 +57,7 @@ class ChangePasswordForm(FlaskForm):
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
+@limiter.limit('10 per minute;50 per hour', methods=['POST'])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('main.index'))
@@ -53,7 +70,7 @@ def login():
                 flash('Your account has been deactivated. Please contact support.', 'error')
                 return render_template('auth/login.html', form=form)
             login_user(user, remember=form.remember_me.data)
-            next_page = request.args.get('next')
+            next_page = _safe_next(request.args.get('next'))
             if user.force_password_change:
                 flash('Please change your password before continuing.', 'warning')
                 return redirect(url_for('auth.change_password'))
@@ -65,6 +82,7 @@ def login():
 
 
 @auth_bp.route('/register', methods=['GET', 'POST'])
+@limiter.limit('5 per minute;20 per hour', methods=['POST'])
 def register():
     if current_user.is_authenticated:
         return redirect(url_for('main.index'))
@@ -101,6 +119,7 @@ def logout():
 
 @auth_bp.route('/account/change-password', methods=['GET', 'POST'])
 @login_required
+@limiter.limit('10 per minute', methods=['POST'])
 def change_password():
     form = ChangePasswordForm()
     if form.validate_on_submit():
