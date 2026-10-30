@@ -51,6 +51,10 @@ class Config:
     PRODUCTS_PER_PAGE = 12
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max upload
 
+    # Flask-Limiter (login / sign-up guessing protection)
+    RATELIMIT_STORAGE_URI = os.environ.get('RATELIMIT_STORAGE_URI', 'memory://')
+    RATELIMIT_ENABLED = True
+
 
 class DevelopmentConfig(Config):
     DEBUG = True
@@ -66,6 +70,7 @@ class TestingConfig(Config):
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
     WTF_CSRF_ENABLED = False
     SECRET_KEY = 'test-secret'
+    RATELIMIT_ENABLED = False  # tests log in many times from one address
 
 
 config = {

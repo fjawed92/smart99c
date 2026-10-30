@@ -1,0 +1,30 @@
+name: tests
+
+# Runs the test suite on every pull request and every push to main, so a
+# change that breaks checkout, login or the IZY Ops sync shows a red X on
+# GitHub before it reaches the live site. Can also be started by hand from
+# the Actions tab.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"   # matches runtime.txt (Render)
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: python -m pytest -q

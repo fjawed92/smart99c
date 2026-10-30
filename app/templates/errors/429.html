@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Too many tries · Smart 99¢ Plus{% endblock %}
+
+{% block content %}
+<div class="container err">
+  <div class="code">429</div>
+  <div>
+    <h1 style="font-size:clamp(44px,6vw,80px)">Too many tries.</h1>
+    <p class="mb-4" style="font-size:18px;max-width:40ch">Please wait a minute and try again.</p>
+    <div class="cta"><a href="{{ url_for('main.index') }}" class="btn btn-primary btn-lg">Go home</a></div>
+  </div>
+</div>
+{% endblock %}

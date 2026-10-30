@@ -4,12 +4,14 @@ from datetime import datetime
 from flask import Flask
 from sqlalchemy.exc import SQLAlchemyError
 from config import config
-from app.extensions import db, login_manager, migrate, csrf, mail
+from app.extensions import db, login_manager, migrate, csrf, mail, limiter
 
 
-def create_app(config_name='default'):
+def create_app(config_name='default', overrides=None):
     app = Flask(__name__)
     app.config.from_object(config[config_name])
+    if overrides:
+        app.config.update(overrides)
 
     # Init extensions
     db.init_app(app)
@@ -17,6 +19,7 @@ def create_app(config_name='default'):
     migrate.init_app(app, db)
     csrf.init_app(app)
     mail.init_app(app)
+    limiter.init_app(app)
 
     # Login manager settings
     login_manager.login_view = 'auth.login'
@@ -119,6 +122,10 @@ def create_app(config_name='default'):
     @app.errorhandler(500)
     def server_error(e):
         return render_template('errors/500.html'), 500
+
+    @app.errorhandler(429)
+    def too_many_requests(e):
+        return render_template('errors/429.html'), 429
 
     # Jinja2 globals
     from app.models import SiteSettings, Category
