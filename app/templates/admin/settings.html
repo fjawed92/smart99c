@@ -136,6 +136,34 @@
         </div>
       </div>
 
+      <div class="card border-0 shadow-sm mb-4" id="pokemon-drop">
+        <div class="card-header bg-white border-0 pt-3">
+          <h6 class="fw-700 mb-0">Pokémon Drop</h6>
+        </div>
+        <div class="card-body">
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="drop_countdown_active" name="drop_countdown_active" {% if drop.countdown %}checked{% endif %}>
+            <label class="form-check-label fw-700" for="drop_countdown_active">Show the drop countdown on the home page</label>
+            <div class="small text-muted">Turn off for a week with no drop. The tile then just says "In stock now".</div>
+          </div>
+          <div class="row g-3">
+            <div class="col-6">
+              <label class="form-label" for="drop_weekday">Drop day</label>
+              <select id="drop_weekday" name="drop_weekday" class="form-select">
+                {% for name in day_names %}
+                <option value="{{ loop.index0 }}" {% if loop.index0 == drop.weekday %}selected{% endif %}>{{ name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label" for="drop_time">Drop time</label>
+              <input type="time" id="drop_time" name="drop_time" class="form-control" value="{{ drop.time }}" step="60" />
+            </div>
+          </div>
+          <small class="text-muted d-block mt-2">Right now the site says <strong>"{{ drop.label }}"</strong>. Changing this updates the home page countdown, the About and Contact pages, and the starter banner message. If you wrote your own banner message about the drop in <a href="{{ url_for('admin.storefront') }}">Banner &amp; Filters</a>, update that one by hand.</small>
+        </div>
+      </div>
+
       <div class="card border-0 shadow-sm mb-4" id="timezone">
         <div class="card-header bg-white border-0 pt-3">
           <h6 class="fw-700 mb-0">Store Time Zone</h6>

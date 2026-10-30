@@ -5,7 +5,6 @@ from app.models import Product, Category
 from app.helpers import get_site_setting
 from app.extensions import db
 from datetime import datetime, timedelta
-from app.store import STORE
 
 main_bp = Blueprint('main', __name__)
 
@@ -56,10 +55,12 @@ def index():
 def next_restock_iso(now=None):
     """Next weekly restock (in the store's time zone) as an ISO timestamp."""
     from app.timezones import store_tz
+    from app.services.storefront import drop_schedule
     tz = store_tz()
     now = now or datetime.now(tz)
-    weekday, hour = STORE['restock_weekday'], STORE['restock_hour']
-    target = now.replace(hour=hour, minute=0, second=0, microsecond=0) + timedelta(days=(weekday - now.weekday()) % 7)
+    drop = drop_schedule()
+    weekday, hour, minute = drop['weekday'], drop['hour'], drop['minute']
+    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0) + timedelta(days=(weekday - now.weekday()) % 7)
     if target <= now:
         target += timedelta(days=7)
     return target.isoformat()

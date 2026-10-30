@@ -29,14 +29,22 @@
   <div class="bento">
     {% if lead_category %}
     <a href="{{ url_for('shop.shop_category', category_slug=lead_category.slug) }}" class="tile t1">
+      {% if store.restock_countdown %}
       <span class="lbl">{{ store.restock_day }} drop</span>
       <div>
         <h3>{{ lead_category.name }}</h3>
-        <p>New stock lands every {{ store.restock_label | replace('Fridays', 'Friday') }}. Next restock in</p>
+        <p>New stock lands every {{ store.restock_label_one }}. Next restock in</p>
         <div class="countdown" id="restockCountdown" data-target="{{ next_restock }}">
           <span data-u="d">--<small>DAYS</small></span><span data-u="h">--<small>HRS</small></span><span data-u="m">--<small>MIN</small></span>
         </div>
       </div>
+      {% else %}
+      <span class="lbl">In stock now</span>
+      <div>
+        <h3>{{ lead_category.name }}</h3>
+        <p>Shop what's on the shelf today.</p>
+      </div>
+      {% endif %}
       <div class="art">{% if lead_category.image_url %}<img src="{{ lead_category.image_url }}" alt="" />{% else %}{{ art_svg('pack', '#FFC93C') }}{% endif %}</div>
     </a>
     {% else %}

@@ -1555,6 +1555,17 @@ def settings():
                 setting.value = value
             else:
                 db.session.add(SiteSettings(key=key, value=value))
+        from app.services.storefront import parse_drop_time
+        set_site_setting('drop_countdown_active',
+                         '1' if request.form.get('drop_countdown_active') == 'on' else '0')
+        drop_day = request.form.get('drop_weekday', '')
+        if drop_day in [str(d) for d in range(7)]:
+            set_site_setting('drop_weekday', drop_day)
+        drop_time = parse_drop_time(request.form.get('drop_time'))
+        if drop_time:
+            set_site_setting('drop_time', '%02d:%02d' % drop_time)
+        elif request.form.get('drop_time'):
+            flash('That drop time didn\'t look right, so the drop time was not changed.', 'error')
         zone = (request.form.get('store_timezone') or '').strip()
         if zone and valid_zone(zone):
             set_site_setting('store_timezone', zone)
@@ -1567,7 +1578,9 @@ def settings():
 
     settings_dict = {s.key: s.value for s in SiteSettings.query.all()}
     from app.timezones import store_tz_name, local_now
+    from app.services.storefront import drop_schedule, DAY_NAMES
     return render_template('admin/settings.html', settings=settings_dict,
+                           drop=drop_schedule(), day_names=DAY_NAMES,
                            zone_choices=zone_choices(), current_zone=store_tz_name(),
                            zone_now=local_now(), zone_label=tz_label())
 

@@ -160,6 +160,19 @@ def create_app(config_name='default'):
                 if line.strip():
                     hours.append((day.strip(), time.strip()) if sep else (line.strip(), ''))
             store['hours'] = hours or STORE['hours']
+        # Pokémon drop day/time (Admin → Settings → Pokémon Drop).
+        if db_ok:
+            try:
+                from app.services.storefront import drop_schedule
+                drop = drop_schedule()
+                store.update(restock_day=drop['day'], restock_weekday=drop['weekday'],
+                             restock_hour=drop['hour'], restock_label=drop['label'],
+                             restock_label_one=drop['label_one'],
+                             restock_countdown=drop['countdown'])
+            except SQLAlchemyError:
+                db.session.rollback()
+        store.setdefault('restock_label_one', store['restock_label'].replace('Fridays', 'Friday'))
+        store.setdefault('restock_countdown', True)
         # "Free delivery over $X" comes from the free delivery option's minimum
         # order (Admin → Shipping), so the banner always matches checkout.
         store['free_delivery_over'] = None
