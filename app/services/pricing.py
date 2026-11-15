@@ -105,6 +105,28 @@ def tax_rate():
     return Decimal(str(current_app.config.get('TAX_RATE', 0.08875)))
 
 
+HOME_STATE = 'NY'
+
+
+def tax_home_state_only():
+    """Admin → Settings: only charge tax when the order stays in New York."""
+    return get_site_setting('tax_home_state_only', '0') == '1'
+
+
+def out_of_state(rate, state):
+    """True when this is a delivery to another state and the owner only taxes NY.
+
+    Store pickup always happens in New York, and a blank state is treated as
+    New York so we never undercharge before the shopper picks one."""
+    from app.models import is_pickup_option
+    if not tax_home_state_only():
+        return False
+    if rate is not None and is_pickup_option(rate.name):
+        return False
+    state = (state or '').strip().upper()
+    return bool(state) and state != HOME_STATE
+
+
 def cash_discount_percent():
     pct = _decimal_setting('cash_discount_percent', '0')
     return pct if 0 < pct < 100 else ZERO
@@ -183,7 +205,8 @@ def rate_problem(rate, goods_total):
 
 # ─── The quote ───────────────────────────────────────────────────────────────
 
-def quote(items, rate=None, *, cash=False, promo_code='', email='', enforce_promo=True):
+def quote(items, rate=None, *, cash=False, promo_code='', email='', enforce_promo=True,
+          state=''):
     """Price an order. `items` is the list from helpers.get_cart_items().
 
     enforce_promo=False still applies an existing code that has since expired or
@@ -233,7 +256,8 @@ def quote(items, rate=None, *, cash=False, promo_code='', email='', enforce_prom
     goods = subtotal - q['promo_discount'] - q['cash_discount']
 
     # 4–6. tax, delivery, fee
-    q['tax'] = money(goods * tax_rate())
+    q['tax_out_of_state'] = out_of_state(rate, state)
+    q['tax'] = ZERO if q['tax_out_of_state'] else money(goods * tax_rate())
     q['rate_error'] = rate_problem(rate, goods)
     shipping = money(rate.price) if rate else ZERO
     if q['free_shipping'] and rate is not None and not is_pickup_option(rate.name):
@@ -264,6 +288,7 @@ def quote_json(q):
         'cash_percent': float(q['cash_percent']),
         'cash_discount': float(q['cash_discount']),
         'tax': float(q['tax']),
+        'tax_out_of_state': bool(q.get('tax_out_of_state')),
         'shipping': float(q['shipping']),
         'free_shipping': q['free_shipping'],
         'service_fee': float(q['fee']),

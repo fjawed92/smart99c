@@ -20,8 +20,9 @@ def _promo_code():
     return session.get('promo_code', '')
 
 
-def _quote(items, rate, cash=False, email=''):
-    return pricing.quote(items, rate, cash=cash, promo_code=_promo_code(), email=email)
+def _quote(items, rate, cash=False, email='', state=''):
+    return pricing.quote(items, rate, cash=cash, promo_code=_promo_code(), email=email,
+                         state=state)
 
 
 def _active_rate(rate_id):
@@ -174,6 +175,7 @@ def checkout():
                            subtotal=card_quote['subtotal'],
                            tax=card_quote['tax'],
                            tax_percent=pricing.tax_rate() * 100,
+                           tax_home_state_only=pricing.tax_home_state_only(),
                            shipping_rates=shipping_rates,
                            rate_states=rate_states,
                            first_open_rate_id=next((r.id for r in shipping_rates
@@ -214,7 +216,7 @@ def checkout_quote():
         return jsonify({'error': 'Your cart is empty.'}), 400
     cash = bool(data.get('cash'))
     rate = _pickup_rate() if cash else _active_rate(data.get('shipping_rate_id'))
-    q = _quote(items, rate, cash=cash, email=data.get('email', ''))
+    q = _quote(items, rate, cash=cash, email=data.get('email', ''), state=data.get('state', ''))
     return jsonify(pricing.quote_json(q))
 
 
@@ -231,7 +233,7 @@ def create_payment_intent():
     rate = _active_rate(shipping_rate_id)
     if shipping_rate_id and rate is None:
         return jsonify({'error': 'That delivery option is not available right now.'}), 400
-    q = _quote(items, rate, email=data.get('email', ''))
+    q = _quote(items, rate, email=data.get('email', ''), state=data.get('state', ''))
     if q['rate_error']:
         return jsonify({'error': q['rate_error'], **pricing.quote_json(q)}), 400
     amount_cents = int(q['total'] * 100)
@@ -275,7 +277,7 @@ def confirm_order():
     # The card was charged with the code applied, so keep it even if it expired
     # or ran out in the meantime.
     q = pricing.quote(items, rate, promo_code=_promo_code(), email=data.get('email', ''),
-                      enforce_promo=False)
+                      enforce_promo=False, state=data.get('state', ''))
 
     # Ask Stripe whether this payment really went through before saving an order.
     if not payment_intent_id:

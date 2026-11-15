@@ -24,6 +24,11 @@
             <label class="form-check-label" for="tax_active">Charge customers sales tax</label>
             <div class="small text-muted">Turn this off to stop adding tax at checkout. Your tax rate below is kept for when you turn it back on.</div>
           </div>
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="tax_home_state_only" name="tax_home_state_only" {% if settings.get('tax_home_state_only', '0') == '1' %}checked{% endif %}>
+            <label class="form-check-label" for="tax_home_state_only">Only charge tax on New York orders</label>
+            <div class="small text-muted">Store pickup and New York deliveries are taxed. Deliveries to other states are not.</div>
+          </div>
           <div class="row g-3">
             <div class="col-md-6">
               <label class="form-label">Tax Rate (%)</label>
