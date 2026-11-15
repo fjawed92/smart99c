@@ -240,7 +240,7 @@
               <strong id="summaryShipping">—</strong>
             </div>
             <div class="d-flex justify-content-between mb-2">
-              <span>Tax ({{ tax_percent|pct(3) }})</span>
+              <span>{% if tax_on %}Tax ({{ tax_percent|pct(3) }}){% else %}Tax (none){% endif %}</span>
               <strong id="summaryTax">${{ "%.2f"|format(tax) }}</strong>
             </div>
             <div class="d-flex justify-content-between mb-1 d-none" id="summaryFeeRow">

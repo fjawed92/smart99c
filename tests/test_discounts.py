@@ -307,3 +307,24 @@ def test_paid_order_keeps_code_that_ran_out(client, db, simple_product, monkeypa
     assert resp.get_json()['success']
     order = Order.query.one()
     assert order.promo_discount == Decimal('1.00') and order.notes is None
+
+
+def test_tax_can_be_turned_off(db, simple_product):
+    set_site_setting('tax_active', '0')
+    db.session.commit()
+    q = pricing.quote(_items(simple_product))
+    assert q['tax'] == 0
+    assert q['total'] >= q['subtotal']
+    set_site_setting('tax_active', '1')
+    db.session.commit()
+    assert pricing.quote(_items(simple_product))['tax'] > 0
+
+
+def test_admin_settings_tax_switch(app, admin_client, db, simple_product):
+    app.config['WTF_CSRF_ENABLED'] = False
+    r = admin_client.post('/admin/settings', data={'tax_rate': '8.875'})   # switch left unticked
+    assert r.status_code == 302, r.get_data(as_text=True)[:500]
+    db.session.expire_all()
+    assert pricing.quote(_items(simple_product))['tax'] == 0
+    admin_client.post('/admin/settings', data={'tax_rate': '8.875', 'tax_active': 'on'})
+    assert pricing.quote(_items(simple_product))['tax'] > 0

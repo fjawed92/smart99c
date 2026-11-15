@@ -224,7 +224,7 @@
       </div>
       <a href="{{ url_for('checkout.checkout') }}" class="btn btn-primary w-100 mb-2">Checkout</a>
       <a href="{{ url_for('cart.cart') }}" class="btn w-100">View cart</a>
-      <p class="text-muted text-center small mt-2 mb-0">Tax and delivery calculated at checkout</p>
+      <p class="text-muted text-center small mt-2 mb-0">{% if tax_on %}Tax and delivery{% else %}Delivery{% endif %} calculated at checkout</p>
     </div>
   </aside>
 
