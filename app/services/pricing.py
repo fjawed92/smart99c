@@ -83,8 +83,17 @@ def sale_category_ids():
 
 # ─── Settings ────────────────────────────────────────────────────────────────
 
+def tax_active():
+    """Admin → Settings "Charge sales tax" switch (on unless turned off)."""
+    return get_site_setting('tax_active', '1') == '1'
+
+
 def tax_rate():
-    """Admin → Settings tax rate as a fraction; falls back to config TAX_RATE."""
+    """Admin → Settings tax rate as a fraction; falls back to config TAX_RATE.
+
+    Returns 0 when the owner has turned sales tax off."""
+    if not tax_active():
+        return Decimal('0')
     raw = (get_site_setting('tax_rate', '') or '').strip()
     try:
         if raw:

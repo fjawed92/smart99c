@@ -218,6 +218,7 @@ def create_app(config_name='default', overrides=None):
         if store['free_delivery_over'] and setting('ticker_free_delivery_active', '1') == '1':
             ticker_items.append(f"Free local delivery over ${store['free_delivery_over']}")
         ticker_items = [t for t in ticker_items if t]
+        tax_on = setting('tax_active', '1') == '1'
         ga_id = setting('ga_measurement_id', '').strip().upper()
         if not re.fullmatch(r'G-[A-Z0-9]{4,15}', ga_id):
             ga_id = ''
@@ -244,6 +245,7 @@ def create_app(config_name='default', overrides=None):
             stripe_public_key=app.config.get('STRIPE_PUBLIC_KEY', ''),
             store=store,
             ga_measurement_id=ga_id,
+            tax_on=tax_on,
             current_year=datetime.utcnow().year,
         )
 

@@ -1529,6 +1529,7 @@ def settings():
     if request.method == 'POST':
         keys = [
             'store_hours',
+            'tax_active',
             'tax_rate',
             'service_fee_active',
             'service_fee_percent',
