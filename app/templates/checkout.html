@@ -240,7 +240,7 @@
               <strong id="summaryShipping">—</strong>
             </div>
             <div class="d-flex justify-content-between mb-2">
-              <span>{% if tax_on %}Tax ({{ tax_percent|pct(3) }}){% else %}Tax (none){% endif %}</span>
+              <span id="summaryTaxLabel" data-default="{% if tax_on %}Tax ({{ tax_percent|pct(3) }}){% else %}Tax (none){% endif %}">{% if tax_on %}Tax ({{ tax_percent|pct(3) }}){% else %}Tax (none){% endif %}</span>
               <strong id="summaryTax">${{ "%.2f"|format(tax) }}</strong>
             </div>
             <div class="d-flex justify-content-between mb-1 d-none" id="summaryFeeRow">
@@ -269,6 +269,8 @@
 {% block extra_scripts %}
 <script>
 const STRIPE_PUBLIC_KEY = "{{ stripe_public_key }}";
+const TAX_NY_ONLY = {{ 'true' if tax_home_state_only else 'false' }};
+function chosenState() { return document.getElementById('state')?.value || ''; }
 const CSRF = () => document.querySelector('[name=csrf_token]').value;
 
 let stripe, elements, paymentElement;
@@ -298,6 +300,8 @@ function renderTotals(data) {
   document.getElementById('summaryShipping').textContent =
     data.shipping === 0 ? (isPickup() ? 'FREE pickup' : 'FREE') : money(data.shipping);
   document.getElementById('summaryTax').textContent = money(data.tax);
+  const taxLabel = document.getElementById('summaryTaxLabel');
+  taxLabel.textContent = data.tax_out_of_state ? 'Tax (none outside NY)' : taxLabel.dataset.default;
   document.getElementById('summaryTotal').textContent = money(data.total);
   document.getElementById('summaryToggleTotal').textContent = money(data.total);
   document.getElementById('submitTotal').textContent = ' · ' + money(data.total);
@@ -312,7 +316,8 @@ function renderTotals(data) {
 
 async function initStripe(shippingRateId) {
   const data = await postJSON('/checkout/create-payment-intent',
-                              {shipping_rate_id: shippingRateId, email: document.getElementById('email').value});
+                              {shipping_rate_id: shippingRateId, email: document.getElementById('email').value,
+                               state: chosenState()});
   if (data.total !== undefined) renderTotals(data);
   if (data.error) { showError(data.error); return; }
 
@@ -355,7 +360,8 @@ async function applyChoice() {
   document.getElementById('summaryTotalLabel').textContent = cash ? 'Pay at pickup' : 'Total';
   if (cash || !STRIPE_PUBLIC_KEY) {
     const data = await postJSON('/checkout/quote', {cash, shipping_rate_id: getSelectedShippingId(),
-                                                    email: document.getElementById('email').value});
+                                                    email: document.getElementById('email').value,
+                                                    state: chosenState()});
     if (data.total !== undefined) renderTotals(data);
   } else {
     initStripe(getSelectedShippingId());
@@ -469,6 +475,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('email').addEventListener('change', () => {
     if (!document.getElementById('promoApplied').classList.contains('d-none')) applyChoice();
   });
+
+  // Tax can depend on the state, so re-price (and refresh the card payment) when it changes.
+  if (TAX_NY_ONLY) {
+    document.getElementById('state')?.addEventListener('change', () => { if (!isPickup()) applyChoice(); });
+  }
 
   const toggle = document.getElementById('summaryToggle');
   toggle.addEventListener('click', () => {

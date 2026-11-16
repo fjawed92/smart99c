@@ -328,3 +328,46 @@ def test_admin_settings_tax_switch(app, admin_client, db, simple_product):
     assert pricing.quote(_items(simple_product))['tax'] == 0
     admin_client.post('/admin/settings', data={'tax_rate': '8.875', 'tax_active': 'on'})
     assert pricing.quote(_items(simple_product))['tax'] > 0
+
+
+def test_tax_only_in_new_york(db, simple_product):
+    from app.models import ShippingRate
+    delivery = ShippingRate(name='Local delivery', price=5, is_active=True)
+    pickup_rate = ShippingRate(name='Store pickup', price=0, is_active=True)
+    db.session.add_all([delivery, pickup_rate])
+    set_site_setting('tax_home_state_only', '1')
+    db.session.commit()
+    items = _items(simple_product)
+    assert pricing.quote(items, delivery, state='NJ')['tax'] == 0
+    assert pricing.quote(items, delivery, state='NJ')['tax_out_of_state'] is True
+    assert pricing.quote(items, delivery, state='NY')['tax'] > 0
+    assert pricing.quote(items, delivery, state='')['tax'] > 0          # not picked yet
+    assert pricing.quote(items, pickup_rate, state='NJ')['tax'] > 0    # pickup is in NY
+    set_site_setting('tax_home_state_only', '0')
+    db.session.commit()
+    assert pricing.quote(items, delivery, state='NJ')['tax'] > 0       # switch off: tax everyone
+
+
+def test_checkout_page_with_ny_only_tax(app, client, admin_client, db, simple_product):
+    app.config['WTF_CSRF_ENABLED'] = False
+    admin_client.post('/admin/settings', data={'tax_rate': '8.875', 'tax_active': 'on',
+                                               'tax_home_state_only': 'on'})
+    assert pricing.tax_home_state_only() and pricing.tax_active()
+    admin_client.post('/admin/settings', data={'tax_rate': '8.875', 'tax_active': 'on'})
+    assert not pricing.tax_home_state_only()
+
+
+def test_checkout_quote_uses_state(client, db, simple_product):
+    from app.models import ShippingRate
+    delivery = ShippingRate(name='Local delivery', price=5, is_active=True)
+    db.session.add(delivery)
+    set_site_setting('tax_home_state_only', '1')
+    db.session.commit()
+    with client.session_transaction() as sess:
+        sess['cart'] = {str(simple_product.id): 1}
+    html = client.get('/checkout').get_data(as_text=True)
+    assert 'const TAX_NY_ONLY = true' in html and 'summaryTaxLabel' in html
+    nj = client.post('/checkout/quote', json={'shipping_rate_id': delivery.id, 'state': 'NJ'}).get_json()
+    ny = client.post('/checkout/quote', json={'shipping_rate_id': delivery.id, 'state': 'NY'}).get_json()
+    assert nj['tax'] == 0 and nj['tax_out_of_state'] is True
+    assert ny['tax'] > 0 and ny['total'] > nj['total']

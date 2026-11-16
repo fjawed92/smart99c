@@ -1556,6 +1556,8 @@ def settings():
                 setting.value = value
             else:
                 db.session.add(SiteSettings(key=key, value=value))
+        set_site_setting('tax_home_state_only',
+                         '1' if request.form.get('tax_home_state_only') == 'on' else '0')
         from app.services.storefront import parse_drop_time
         set_site_setting('drop_countdown_active',
                          '1' if request.form.get('drop_countdown_active') == 'on' else '0')
