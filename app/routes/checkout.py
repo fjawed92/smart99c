@@ -392,7 +392,10 @@ def stripe_webhook():
     elif event['type'] == 'payment_intent.payment_failed':
         pi = event['data']['object']
         order = Order.query.filter_by(stripe_payment_intent_id=pi['id']).first()
-        if order:
+        # Stock was taken when the order was placed; a failed payment gives it
+        # back. Only once: an order already cancelled has had its stock back.
+        if order and order.status not in ('cancelled', 'no_show', 'refunded'):
+            pickup.restock(order)
             order.set_status('cancelled')
             db.session.commit()
 

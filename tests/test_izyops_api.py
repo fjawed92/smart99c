@@ -68,6 +68,22 @@ def test_the_stripe_webhook_needs_no_csrf_token(app, db, monkeypatch, simple_pro
     assert db.session.get(Order, order.id).status == 'processing'
 
 
+def test_a_failed_card_payment_puts_the_stock_back_once(app, db, monkeypatch, simple_product):
+    """Stock is taken when the order is placed; a declined card used to cancel
+    the order and keep the stock off the shelf."""
+    from app.models import Product
+
+    before = simple_product.stock_quantity
+    order = _order(db, status='pending', product=simple_product)
+    event = {'type': 'payment_intent.payment_failed', 'data': {'object': {'id': 'pi_123'}}}
+    monkeypatch.setattr(stripe.Webhook, 'construct_event', lambda payload, sig, secret: event)
+    client = app.test_client()
+    for _ in range(2):  # Stripe can send the same event twice
+        assert client.post('/stripe/webhook', data='{}', headers={'Stripe-Signature': 't=1'}).status_code == 200
+    assert db.session.get(Order, order.id).status == 'cancelled'
+    assert db.session.get(Product, simple_product.id).stock_quantity == before + 2
+
+
 # ─── products ────────────────────────────────────────────────────────────────
 
 def test_products_get_permanent_skus_and_colours_are_rows(api, db, category, simple_product, variant_product):
